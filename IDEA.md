@@ -19,6 +19,8 @@ The decision log is the memory, and the memory is the product.
 - Pushback personas: a skeptic, an operator, a security reviewer — each interrogating the decision from a different seat before it's ratified.
 - Export lanes: raw Markdown per record (MADR-shaped), a whole-log dump, or a PR into the team's repo so the records live in version control.
 - **An MCP server interface**, so coding agents can ask "has this been decided?" mid-task and cite ADRs in their output. Decision records become agent-legible context — the most on-thesis extension possible.
+- Amendment as an admin verb, distinct from supersession: fix a typo or add context on a ratified record, with a visible version trail showing exactly what changed. Never a way to change the decision itself — that's supersession's job.
+- Claude Code-first consumption: using Ratify from inside a Claude Code session (subscription covers the model bill) is a primary lane, not a fallback. The hosted app on API keys is a must for everyone else, but deliberately the secondary lane.
 - Team mode: a decision needs sign-off from named people before it ratifies. (The name almost demands a quorum feature.)
 - "Case law" summaries: ask the log itself questions ("what have we decided about queues?") and get a synthesized answer with citations.
 - Voice-input sessions for decision debriefs after a meeting, while it's still fresh.
@@ -42,6 +44,8 @@ The decision log is the memory, and the memory is the product.
 - [ ] Auth for the deployed demo: open with a passphrase gate, or per-user?
 - [ ] License: FSL-1.1 (the Assay precedent) or MIT for maximum portfolio legibility?
 - [ ] When does the repo flip public — at assignment submission, or immediately?
+- [ ] Amendment mechanics: what does the version trail look like (per-record changelog, inline diff), and how does the tool police the line between an admin fix and a decision change that demands supersession?
+- [ ] Challenge depth in v0: one fixed calibration, or user-selectable (lightweight capture ↔ full pressure-test)?
 
 ## Not Now (Parking Lot)
 
@@ -50,6 +54,7 @@ The decision log is the memory, and the memory is the product.
 - GitHub PR export and repo integration.
 - Voice input via Realtime.
 - Embedding-based retrieval over large logs.
+- Importing an existing ADR folder (docs/adr/) to seed the log — the adoption path for teams with prior records.
 - Any SaaS/billing shape. Portfolio piece first; product questions only if it earns them.
 
 ---
