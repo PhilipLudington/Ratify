@@ -90,9 +90,16 @@ async function forwardToLog(
 }
 
 export async function handleRequest(request: Request, env: DoormanEnv): Promise<Response> {
-  if (!env.DEMO_PASSPHRASE || !env.SESSION_SECRET) {
-    // A missing secret must fail loudly rather than quietly opening the gate.
-    return json({ error: 'Server is not configured.' }, { status: 500 });
+  // A missing secret must fail loudly rather than quietly opening the gate.
+  // The response names which secrets are absent but never their values: the
+  // names are already public in this repository, and a deploy that silently
+  // refuses every request without saying why costs far more than it protects.
+  const missing = (['DEMO_PASSPHRASE', 'SESSION_SECRET'] as const).filter((name) => !env[name]);
+  if (missing.length > 0) {
+    return json(
+      { error: 'Server is not configured.', missing },
+      { status: 500 },
+    );
   }
 
   const url = new URL(request.url);

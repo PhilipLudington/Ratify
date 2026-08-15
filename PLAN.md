@@ -110,10 +110,19 @@ and comes back, live on the real hostname.
       them (completed 2026-08-15)
 - [x] Add `LICENSE` (FSL-1.1-MIT) and the initial `README.md` (completed
       2026-08-15)
-- [ ] Set secrets — `SESSION_SECRET` done for production and preview
-      (generated and piped, never printed, 2026-08-15); `DEMO_PASSPHRASE` and
-      `ANTHROPIC_API_KEY` outstanding, both deliberately left to be set by
-      hand so no secret value passes through a session transcript
+- [ ] Set secrets — `SESSION_SECRET` done for production and preview;
+      `DEMO_PASSPHRASE` currently holds a **throwaway** value, generated and
+      piped so it was never printed, which means nobody knows it and the demo
+      is effectively closed until the real one is set. `ANTHROPIC_API_KEY` is
+      outstanding and not needed before Phase 2. All values are set by pipe or
+      by hand rather than echoed, because Phase 6 turns these sessions into a
+      public prompt history.
+      **Gotcha, learned the hard way:** Pages binds secrets at deploy time, so
+      setting one has no effect until the next `npm run deploy:pages`. Worse,
+      `wrangler pages secret put` run through a non-TTY prompt silently uploads
+      an *empty* value — which is what made the gate 500 on every request while
+      `pages secret list` cheerfully showed the secret as present. Pipe the
+      value in, or run it in a real terminal.
 - [ ] Deploy; attach the custom hostname; confirm both URLs serve — both
       deployments are live (`ratify-log` uploaded with no routes as designed;
       Pages at <https://ratify-4pp.pages.dev>, 2026-08-15). The custom hostname
@@ -132,15 +141,18 @@ cookies reach two different DOs and cannot see each other's value.
 
 ### Phase 0 Readiness Gate
 
-- [ ] Production URL responds behind the gate — the client serves and the
-      doorman's fail-loud path is verified live (a missing secret returns 500
-      rather than opening the gate, 2026-08-15); the gate itself cannot be
-      exercised until `DEMO_PASSPHRASE` is set
+- [x] Production URL responds behind the gate — verified live against
+      <https://ratify-4pp.pages.dev> by `scripts/verify-gate.sh`: unauthenticated
+      requests and forged cookies are refused, the wrong passphrase is refused,
+      the right one issues a cookie, a write survives into a later request, and
+      two sessions land in different Durable Objects that cannot read each
+      other (2026-08-15). The doorman's fail-loud path was verified live too —
+      a missing secret returns 500 rather than opening the gate.
 - [x] DO storage survives across requests within a session (test + local HTTP,
       2026-08-15)
 - [x] Session isolation verified — two cookies reach two different DO IDs and
-      cannot read each other's value (test + local HTTP, 2026-08-15); repeat
-      with two browsers against production
+      cannot read each other's value, in tests, in local HTTP, and against
+      production (2026-08-15)
 - [x] `./run-tests.sh` and `./run-build.sh` both succeed (32 tests, 2026-08-15)
 
 ---

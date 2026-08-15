@@ -119,6 +119,18 @@ dashboard:
 Durable Object tests run against the actual runtime with the actual storage
 semantics, not a mock.
 
+To check a *deployed* stack rather than the code, there is a readiness script.
+It prompts for the passphrase with hidden input and never echoes it:
+
+```sh
+scripts/verify-gate.sh https://ratify-4pp.pages.dev
+```
+
+It asserts the gate refuses the unauthenticated, the wrong passphrase and a
+forged cookie; that the right passphrase issues a cookie; that a write survives
+into a later request; and that two sessions land in different Durable Objects
+which cannot read each other.
+
 ## Demo access
 
 **<https://ratify-4pp.pages.dev>**
@@ -146,10 +158,20 @@ deployed values are set through Wrangler.
 | `ANTHROPIC_API_KEY` | `ratify-log` | the agent, called via Cloudflare AI Gateway |
 
 ```sh
-wrangler pages secret put DEMO_PASSPHRASE
-wrangler pages secret put SESSION_SECRET
+wrangler pages secret put DEMO_PASSPHRASE --project-name ratify
+wrangler pages secret put SESSION_SECRET --project-name ratify
 wrangler secret put ANTHROPIC_API_KEY -c wrangler.log.toml
 ```
+
+Two things about Pages secrets that will otherwise cost you an afternoon:
+
+- **They bind at deploy time.** Setting a secret does nothing to the running
+  site until the next `npm run deploy:pages`.
+- **Run them attached to a real terminal.** `wrangler pages secret put` prompts
+  for the value, and a prompt with no TTY behind it uploads an *empty string*
+  and still reports success — after which `wrangler pages secret list` shows
+  the secret as present while every request fails. Pipe the value instead if
+  you are not at a terminal: `printf '%s' "$VALUE" | wrangler pages secret put …`
 
 ## License
 
