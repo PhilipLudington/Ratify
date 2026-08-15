@@ -46,6 +46,17 @@ api() { # method path [cookie-jar] [json-body]
 
 body() { cat "$JAR/body"; }
 
+# A passphrase is user-chosen text, so it may legitimately contain the two
+# characters that would otherwise break the JSON body we wrap it in.
+json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+
+AUTH_PAYLOAD=$(printf '{"passphrase":"%s"}' "$(json_escape "$RATIFY_PASSPHRASE")")
+
+authenticate() { # cookie-jar -> status code
+  curl -s -o "$JAR/body" -w '%{http_code}' -c "$JAR/$1" -X POST "$BASE/api/auth" \
+    -H 'Content-Type: application/json' --data-binary "$AUTH_PAYLOAD"
+}
+
 # jq is not assumed; these are small, well-formed payloads.
 field() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" "$JAR/body"; }
 
@@ -67,10 +78,29 @@ STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/ping" \
 check "forged cookie is refused" "401" "$STATUS"
 
 printf '\nAuthentication\n'
-STATUS=$(curl -s -o "$JAR/body" -w '%{http_code}' -c "$JAR/alice" -X POST "$BASE/api/auth" \
-  -H 'Content-Type: application/json' \
-  --data-binary @<(printf '{"passphrase":"%s"}' "$RATIFY_PASSPHRASE"))
+# Pages binds secrets at deploy time and a fresh deployment takes some seconds
+# to reach every edge, during which the previous passphrase is still the live
+# one. A first 401 is therefore ambiguous — wrong passphrase, or right
+# passphrase against a deployment that has not caught up yet. Retry before
+# calling it, so the two cases stop looking identical.
+STATUS=$(authenticate alice)
+if [ "$STATUS" = "401" ]; then
+  printf '        first attempt refused; a fresh deploy takes ~30s to\n'
+  printf '        propagate, so retrying for a minute before believing it\n'
+  for _ in 1 2 3 4 5 6 7 8; do
+    sleep 8
+    STATUS=$(authenticate alice)
+    [ "$STATUS" = "200" ] && break
+  done
+fi
 check "correct passphrase is accepted" "200" "$STATUS"
+if [ "$STATUS" = "401" ]; then
+  printf '\n        Still refused after a minute, so this is not propagation.\n'
+  printf '        The passphrase sent here is not the one bound to the live\n'
+  printf '        deployment. Set it again and redeploy:\n'
+  printf '          npx wrangler pages secret put DEMO_PASSPHRASE --project-name ratify\n'
+  printf '          npm run deploy:pages\n\n'
+fi
 
 if grep -q ratify_session "$JAR/alice" 2>/dev/null; then
   pass "a session cookie is issued"
@@ -90,10 +120,7 @@ NOTE=$(field note)
 check "  ... with the same value" "use Postgres for the job queue" "$NOTE"
 
 printf '\nTwo sessions cannot see each other\n'
-STATUS=$(curl -s -o /dev/null -w '%{http_code}' -c "$JAR/bob" -X POST "$BASE/api/auth" \
-  -H 'Content-Type: application/json' \
-  --data-binary @<(printf '{"passphrase":"%s"}' "$RATIFY_PASSPHRASE"))
-check "a second session authenticates" "200" "$STATUS"
+check "a second session authenticates" "200" "$(authenticate bob)"
 
 api POST /api/ping bob '{"note":"ship on Cloudflare"}' > /dev/null
 BOB_LOG=$(field log)
