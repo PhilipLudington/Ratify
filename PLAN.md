@@ -112,7 +112,8 @@ and comes back, live on the real hostname.
       2026-08-15)
 - [ ] Set secrets (`DEMO_PASSPHRASE`, `SESSION_SECRET`, `ANTHROPIC_API_KEY`)
 - [ ] Deploy; attach the custom hostname; confirm both URLs serve
-- [ ] Flip the repo public (DESIGN.md: history in the open from day one)
+- [x] Flip the repo public (DESIGN.md: history in the open from day one)
+      (completed 2026-08-15, after a full-history secret scan came back clean)
 
 ### Testing Strategy
 
