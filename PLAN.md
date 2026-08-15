@@ -1,0 +1,403 @@
+# Ratify — Implementation Plan
+
+## Overview
+
+Build v0 of Ratify — the conversational decision-record engine specified in
+[DESIGN.md](DESIGN.md), bound by [PHILOSOPHY.md](PHILOSOPHY.md) — as a
+Cloudflare Pages + Workers + Durable Objects app, deployed behind a passphrase
+gate and demoable end-to-end in ninety seconds.
+
+The plan is deploy-early: a walking skeleton reaches production in Phase 0 and
+every later phase lands on live infrastructure. Phases are ordered so the
+end-to-end loop (chat → draft → ratify → appears in the log) closes at Phase 3,
+before the marquee feature (the precedent check) is built on top of it. That
+ordering means a schedule slip costs polish, never a demoable product.
+
+Timeline: ~2–3 weeks, unhurried, with room to playtest the challenge
+calibration before submission.
+
+**Current status:** Phase 0 not started.
+
+### Open Questions Closed Here
+
+DESIGN.md deferred five decisions to this document. All five are now decided:
+
+- **Model + API path:** Claude Sonnet 5 (`claude-sonnet-5`) called through
+  **Cloudflare AI Gateway** to the Anthropic API. Gateway buys caching, rate
+  limiting, request logging, and spend visibility with no code, and is the more
+  Cloudflare-native story for the assignment. Sonnet 5 is the right cost and
+  latency point for a ~three-question pressure test with tool use; Opus 5 was
+  rejected on first-token latency during a live demo.
+- **Client stack:** vanilla TypeScript + Vite on Pages. Three surfaces only
+  (chat pane, live draft record with scrutiny gauge, log view); SSE streaming
+  from the Worker into plain DOM updates. No framework to justify, and the diff
+  stays readable to a reviewer.
+- **Starter ADR seed content:** authored in Phase 1, Task set "Seed the
+  sandbox" — six records for a fictional team, designed so that the decisions a
+  reviewer is most likely to bring (a queue, a datastore, a deploy target) trip
+  a real precedent conflict rather than a contrived one.
+- **Rate limits:** enforced inside the Log DO, per session — 40 agent turns per
+  rolling hour and 150 per DO lifetime; backed by a spend cap configured on the
+  AI Gateway. Numbers are generous for a genuine reviewer and cheap for an
+  abuser; see Phase 6.
+- **Demo hostname and prompt history:** `ratify.philipludington.com` (CNAME to
+  Pages), with the `*.pages.dev` URL as the always-working fallback in the
+  submission notes. The assignment's prompt-history requirement is assembled at
+  `docs/prompt-history.md` in Phase 6 from this project's session transcripts.
+
+---
+
+## Phase 0: Foundation & Deployed Skeleton
+
+**Goal:** A passphrase-gated, session-cookied request reaches a Durable Object
+and comes back, live on the real hostname.
+**Estimated Effort:** 2 days
+
+### Deliverables
+
+- `wrangler.toml` with the `LOG` Durable Object binding and Pages Functions
+  config; TypeScript + Vite build for the client.
+- Worker doorman: passphrase check against `DEMO_PASSPHRASE`, signed session
+  cookie, DO address derivation, request forwarding.
+- `LogDO` class that persists and returns a trivial value, proving storage.
+- Deployed at `ratify.philipludington.com` with the `pages.dev` fallback live.
+- `.airtower.json`, `run-tests.sh`, `run-build.sh`, `LICENSE` (FSL-1.1-MIT),
+  `README.md` (with "demo passphrase available on request").
+- Vitest configured with `@cloudflare/vitest-pool-workers` so DO code is tested
+  in the real runtime, not a mock.
+
+### Tasks
+
+- [ ] Scaffold the repo: `src/worker/`, `src/do/`, `src/client/`, `src/shared/`,
+      `tests/`, `docs/`
+- [ ] Write `wrangler.toml`: DO binding, migrations, AI Gateway vars, secrets list
+- [ ] Implement the passphrase gate and signed session cookie in the Worker
+- [ ] Derive the sandbox DO name from the session ID; forward to the DO stub
+- [ ] Implement `LogDO` with a storage read/write round-trip endpoint
+- [ ] Set up Vite build for the client; ship a placeholder shell page
+- [ ] Configure Vitest + `@cloudflare/vitest-pool-workers`; one passing DO test
+- [ ] Write `run-tests.sh` and `run-build.sh`; add `.airtower.json` pointing at them
+- [ ] Add `LICENSE` (FSL-1.1-MIT) and the initial `README.md`
+- [ ] Set secrets (`DEMO_PASSPHRASE`, `ANTHROPIC_API_KEY`, cookie signing key)
+- [ ] Deploy; attach the custom hostname; confirm both URLs serve
+- [ ] Flip the repo public (DESIGN.md: history in the open from day one)
+
+### Testing Strategy
+
+`./run-tests.sh` green. Manually: a request with no cookie and no passphrase is
+rejected; the correct passphrase issues a cookie; a second request with that
+cookie reaches the DO and reads back what the first one wrote. Two different
+cookies reach two different DOs and cannot see each other's value.
+
+### Phase 0 Readiness Gate
+
+- [ ] Production URL responds behind the gate
+- [ ] DO storage survives across requests within a session
+- [ ] Session isolation verified with two browsers
+- [ ] `./run-tests.sh` and `./run-build.sh` both succeed
+
+---
+
+## Phase 1: The Log
+
+**Goal:** Records exist, are addressable, and are visible — a seeded sandbox log
+renders in the log view before any agent exists.
+**Estimated Effort:** 3 days
+
+### Deliverables
+
+- Record format module in `src/shared/`: parse and serialize the house format
+  (YAML frontmatter + prose sections), the single source of truth for both DO
+  and client.
+- Full DO storage schema: `meta`, `index`, `record:{n}`, `record:{n}:v{k}`,
+  `draft` — including the version-trail keys, which ship now even though no
+  amendment UI does.
+- Self-seeding on first wake: six starter ADRs written into a sandbox log.
+- Log view UI: index list, record detail, supersession chain rendering.
+- Read APIs: `GET /api/log` (index), `GET /api/record/:n`.
+
+### Tasks
+
+- [ ] Define the `Record` and `Index` types in `src/shared/record.ts`
+- [ ] Implement frontmatter + section serialization and its inverse parse
+- [ ] Round-trip property test: `parse(serialize(r))` deep-equals `r`
+- [ ] Implement DO storage accessors for every key in the schema
+- [ ] Implement `meta` with the next-number counter (never reused, never renumbered)
+- [ ] **Seed the sandbox:** author six starter ADRs for a fictional team,
+      covering datastore choice, a managed-services-first rule, a queue
+      decision, a deploy-target decision, a superseded early call, and one
+      record carrying an open objection
+- [ ] Wire self-seeding on first wake when storage is empty; named logs seed empty
+- [ ] Build the log view: index list with status badges, record detail page
+- [ ] Render supersession links in both directions in the detail view
+- [ ] Add `GET /api/log` and `GET /api/record/:n` through the Worker
+
+### Testing Strategy
+
+Round-trip tests on the record format, including a record with `supersedes`,
+one with an empty `## Objections`, and one with a version snapshot. A DO test
+asserting a fresh instance self-seeds exactly six records with sequential
+numbers and a consistent index. Manually: open the app on a new session and see
+a populated, readable log with a visible supersession chain.
+
+### Phase 1 Readiness Gate
+
+- [ ] A brand-new session shows six seeded records
+- [ ] Record format round-trips losslessly, verified by test
+- [ ] The seeded log contains at least one supersession chain and one open objection
+- [ ] Numbering is monotonic and sourced solely from `meta`
+
+---
+
+## Phase 2: The Agent & the Visible Draft
+
+**Goal:** A conversation with Claude that pressure-tests a decision and fills in
+a visible draft record as it goes.
+**Estimated Effort:** 3–4 days
+
+### Deliverables
+
+- Anthropic client in the DO, calling Sonnet 5 through AI Gateway, streaming.
+- Agent loop with conversation history persisted in the `draft` key.
+- System prompt encoding the three pinned behaviors and the calibration target
+  ("a staff engineer who respects your time" — roughly three good questions).
+- `update_draft(sections)` tool, applied server-side to the stored draft.
+- Chat UI with SSE streaming; the visible draft record beside it, updating live.
+- The scrutiny gauge, derived mechanically from draft state.
+
+### Tasks
+
+- [ ] Configure the AI Gateway endpoint; route Anthropic calls through it
+- [ ] Implement the streaming agent loop inside the DO (`POST /api/chat`, SSE out)
+- [ ] Persist conversation history and draft state atomically per turn
+- [ ] Write the system prompt: precedent check always runs, draft early,
+      pushback offered never imposed
+- [ ] Implement the `update_draft` tool and its server-side application
+- [ ] Build the chat pane with token streaming and a stop control
+- [ ] Build the visible draft record panel, re-rendering as sections fill
+- [ ] Implement gauge derivation: sections populated, alternatives count,
+      precedent status, objections open/addressed — no model judgment anywhere
+- [ ] Render the segmented gauge; assert no target state, no praise, no nagging copy
+
+### Testing Strategy
+
+Unit tests for gauge derivation across a matrix of draft states, including
+empty, partial, and complete. A DO test that a scripted tool-call sequence
+mutates the stored draft as expected. Manually: bring a real decision, watch the
+draft fill within the first two exchanges, and confirm the agent asks roughly
+three questions rather than interrogating.
+
+### Phase 2 Readiness Gate
+
+- [ ] A decision brought in cold produces a partially filled draft by exchange two
+- [ ] The gauge changes only in response to mechanically observable draft state
+- [ ] Streaming survives a page still open across a multi-tool-call turn
+- [ ] No copy anywhere in the UI prescribes a target gauge state
+
+---
+
+## Phase 3: Ratification & Supersession
+
+**Goal:** The loop closes — a conversation becomes a numbered permanent record,
+and a new record can supersede an old one with both links on disk.
+**Estimated Effort:** 2–3 days
+
+### Deliverables
+
+- Ratify path in the DO: assign number, stamp the scrutiny gauge into
+  frontmatter, write `record:{n}`, update `index`, clear `draft` — all inside
+  one DO invocation, atomic by the platform's single-threading guarantee.
+- Supersede: writes `superseded_by` into the prior record and flips its status.
+- Ratify affordance present at every moment of the conversation (Principle 3).
+- Version-trail write path (`record:{n}:v{k}` snapshots + `## History` lines)
+  exercised by tests even though no amendment UI ships.
+
+### Tasks
+
+- [ ] Implement `POST /api/ratify`, optionally carrying `supersedes: [k]`
+- [ ] Stamp the gauge snapshot into frontmatter at ratification time
+- [ ] Write both directions of the supersession link in the same invocation
+- [ ] Write unresolved objections into `## Objections` verbatim at ratify time
+- [ ] Append the first `## History` line (`ratified (v1)`)
+- [ ] Implement the internal amend path with full-snapshot versioning (no UI)
+- [ ] Put a ratify control in the UI that is never disabled and never gated
+- [ ] After ratify, route the user to the new record in the log view
+
+### Testing Strategy
+
+DO tests: ratifying twice yields consecutive numbers with no reuse; ratifying
+with `supersedes: [4]` leaves ADR-4 marked superseded and pointing forward;
+ratifying a nearly-empty draft still produces a valid record (Principle 4); an
+amend writes a `v1` snapshot and leaves the current record readable. Manually:
+ratify at exchange one, confirm a thin but real record.
+
+### Phase 3 Readiness Gate
+
+- [ ] Ratify is reachable at every point in the conversation, including the first
+- [ ] Numbers are never reused after any sequence of ratifications
+- [ ] Supersession links exist in both directions on disk and in the log view
+- [ ] A thin record ratifies without the agent objecting or blocking
+
+---
+
+## Phase 4: The Precedent Check
+
+**Goal:** Every decision is read against the whole log, and no hallucinated
+quote can reach the user.
+**Estimated Effort:** 3 days
+
+### Deliverables
+
+- Tier 1: the compact index injected into agent context on every turn.
+- Tier 2: `read_record(n)` tool for full text on suspicion of conflict.
+- `raise_conflict(n, quote)` tool gated by in-code substring verification
+  against the stored record; failures are rejected back to the model for retry.
+- Conflict presentation in the UI: record number, verbatim quote, and a path to
+  supersede that carries no lecture.
+
+### Tasks
+
+- [ ] Build the index-line generator and inject it into every turn's context
+- [ ] Implement `read_record(n)` with a not-found path the model can recover from
+- [ ] Implement `raise_conflict` with exact-substring verification in the DO
+- [ ] On verification failure, return a structured rejection and let the model retry
+- [ ] Cap retries and degrade to "no conflict claimed" rather than showing an
+      unverified claim
+- [ ] Render conflicts with the quote attributed to its record number
+- [ ] Offer supersede directly from a surfaced conflict
+- [ ] Update gauge derivation to reflect precedent status (checked / conflict /
+      conflict-resolved)
+
+### Testing Strategy
+
+The load-bearing test: a `raise_conflict` call carrying a paraphrased quote is
+rejected and never renders — asserted at the DO layer, not the UI. Tests that a
+verbatim quote passes, that whitespace-only differences are handled as
+specified, and that retry exhaustion suppresses the claim. Manually: bring a
+decision that contradicts a seeded ADR and confirm the conflict surfaces with a
+real quote.
+
+### Phase 4 Readiness Gate
+
+- [ ] No path exists by which an unverified quote reaches the client
+- [ ] A seeded-log conflict surfaces on a plausible reviewer decision
+- [ ] Overturning precedent costs one command and produces no lecture
+- [ ] The oldest seeded record is still reachable by the check (tier 1 has no recency filter)
+
+---
+
+## Phase 5: Export
+
+**Goal:** The exported log is never less complete or less readable than the
+in-app log (Principle 1).
+**Estimated Effort:** 1–2 days
+
+### Deliverables
+
+- `GET /api/export/record/:n` → raw `ADR-{n}.md`.
+- `GET /api/export/log` → zip: current records plus `ADR-{n}.v{k}.md` snapshots
+  where history exists.
+- Download affordances in the record detail and log views.
+
+### Tasks
+
+- [ ] Implement single-record Markdown export with correct content-disposition
+- [ ] Implement whole-log zip assembly in the DO
+- [ ] Include every version snapshot alongside its current record
+- [ ] Add export controls to the log view and record detail
+- [ ] Verify exported files are byte-identical to stored records
+
+### Testing Strategy
+
+A test that exports a log containing a superseded record, an amended record with
+two snapshots, and a record with open objections, then asserts every stored key
+is represented in the archive and every file re-parses through the shared record
+module. Manually: unzip, read in a plain editor, confirm nothing is missing.
+
+### Phase 5 Readiness Gate
+
+- [ ] Every stored record and snapshot appears in the archive
+- [ ] Exported Markdown re-parses losslessly
+- [ ] No in-app content exists that export cannot represent
+
+---
+
+## Phase 6: Calibration, Hardening & Submission
+
+**Goal:** The demo is tight, the endpoint is protected, and the assignment is
+submitted.
+**Estimated Effort:** 3–4 days
+
+### Deliverables
+
+- Per-session rate limiting in the DO: 40 agent turns per rolling hour, 150 per
+  DO lifetime; AI Gateway spend cap configured.
+- Sandbox expiry: storage alarm set per interaction, self-wipe after 30 days idle.
+- Tuned system prompt after playtesting against the written calibration target.
+- A rehearsed ninety-second demo path.
+- `docs/prompt-history.md` assembled for the assignment's requirement.
+- Final `README.md` and submission notes carrying the passphrase (never in the repo).
+
+### Tasks
+
+- [ ] Implement per-session rate limiting with a clear user-facing refusal
+- [ ] Configure the AI Gateway spend cap and confirm it trips
+- [ ] Implement the storage alarm and 30-day idle self-wipe
+- [ ] Playtest with at least five real decisions; log where the agent nagged or
+      went quiet
+- [ ] Tune the system prompt against the calibration target; re-playtest
+- [ ] Audit every user-visible string for prescriptive gauge language
+- [ ] Rehearse and time the ninety-second demo: seeded log → decision → conflict
+      → supersede → ratify → export
+- [ ] Assemble `docs/prompt-history.md`
+- [ ] Final README pass; write submission notes with the passphrase out-of-band
+- [ ] Confirm no secret has ever entered git history
+
+### Testing Strategy
+
+Rate limiting asserted by a DO test that the 41st turn in an hour is refused and
+the refusal is legible. An alarm test that an idle DO wipes on schedule. A
+secret scan across full git history. The demo itself is the acceptance test:
+performed end-to-end, under ninety seconds, on the production hostname, from a
+browser that has never visited before.
+
+### Phase 6 Readiness Gate
+
+- [ ] Ninety-second demo performed cold, end to end, on production
+- [ ] Rate limits and spend cap both verified to trip
+- [ ] No secret present anywhere in git history
+- [ ] Prompt history assembled and submission notes written
+
+---
+
+## Risk Register
+
+| Risk | Impact | Likelihood | Mitigation |
+|------|--------|------------|------------|
+| Quote verification rejects valid paraphrase-prone model output too often | Medium | High | `raise_conflict` demands a copied line; retries are cheap; retry exhaustion suppresses the claim rather than weakening verification (Phase 4) |
+| Challenge calibration lands as nagging | High | Medium | Written target anchors tuning; dedicated playtest task in Phase 6; trim conversation length, never access to ratify |
+| AI Gateway adds latency or an outage surface | Medium | Low | Keep the direct-Anthropic path one config change away; measure first-token time during Phase 2 |
+| Streaming + tool-use UX is fiddlier than budgeted | Medium | Medium | Phase 2 is the widest estimate; the fallback is non-streamed turn-at-a-time, which costs polish only |
+| Seed ADRs produce contrived rather than natural conflicts | High | Medium | Author seeds against the decisions a reviewer actually brings; validate in Phase 4's gate with a real cold attempt |
+| Scope creep from the amendment UI (schema is right there) | Medium | Medium | DESIGN.md's fence is explicit; Phase 3 ships the write path with tests and no interface |
+| Custom hostname / DNS delays before submission | Low | Medium | `pages.dev` fallback is live from Phase 0 and named in the submission notes |
+| Leaked passphrase burns tokens | Medium | Low | Per-session DO limits, Gateway spend cap, rotate-on-suspicion via one env var |
+
+## Timeline
+
+```
+Phase 0  Foundation & Deployed Skeleton   2 days     ──┐
+Phase 1  The Log                          3 days       │ log renders before any agent
+Phase 2  The Agent & the Visible Draft    3–4 days     │ needs Phase 1's draft schema
+Phase 3  Ratification & Supersession      2–3 days     │ loop closes here
+Phase 4  The Precedent Check              3 days       │ needs seeded log + agent tools
+Phase 5  Export                           1–2 days     │ needs the full version trail
+Phase 6  Calibration & Submission         3–4 days   ──┘
+                                          17–21 days
+```
+
+Dependencies are strictly linear except Phase 5, which depends only on Phases 1
+and 3 and can be pulled forward if Phase 4 stalls. If the schedule compresses,
+the cut-lines in order are: whole-log zip (single-record export stays), the
+supersession-chain rendering in the log view, and playtest iterations beyond the
+first — never the precedent check's quote verification, and never ratify-anytime.
