@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ratify</title>
+    <meta
+      name="description"
+      content="A conversational decision-record engine. The conversation is the documentation work."
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <h1>Ratify</h1>
+      <p class="tagline">The conversation is the documentation work.</p>
+    </header>
+
+    <main id="app">
+      <!-- The gate. DESIGN.md: cost protection, not secrecy. -->
+      <section id="gate" class="panel" hidden>
+        <h2>Demo access</h2>
+        <p class="muted">
+          Ratify is gated to keep automated traffic off the language-model
+          endpoint. The demo passphrase is available on request.
+        </p>
+        <form id="gate-form" autocomplete="off">
+          <label for="passphrase">Passphrase</label>
+          <input id="passphrase" name="passphrase" type="password" required />
+          <button type="submit">Enter</button>
+        </form>
+        <p id="gate-error" class="error" role="alert" hidden></p>
+      </section>
+
+      <!-- Phase 0 placeholder. Phases 1–4 replace this with the log view,
+           the chat pane, and the visible draft record. -->
+      <section id="shell" class="panel" hidden>
+        <h2>Phase 0 — deployed skeleton</h2>
+        <p class="muted">
+          No agent and no records yet. This panel proves the chain end to end:
+          the request passes the gate, the doorman derives this session's
+          Durable Object, and the object remembers what it was told.
+        </p>
+        <form id="ping-form" autocomplete="off">
+          <label for="note">Write a value to this session's log</label>
+          <input id="note" name="note" type="text" placeholder="anything at all" required />
+          <button type="submit">Write</button>
+          <button type="button" id="reload">Read back</button>
+        </form>
+        <pre id="ping-output" class="output">not read yet</pre>
+        <button type="button" id="logout" class="link">Forget this session</button>
+      </section>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

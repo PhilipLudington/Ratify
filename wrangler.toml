@@ -1,0 +1,34 @@
+# Ratify — Pages project (client + doorman).
+#
+# This is the FRONT half of the deployment. It serves the Vite build from
+# dist/ and runs the doorman in functions/. It does NOT contain the LogDO
+# class: a Pages Function can bind to a Durable Object but cannot define one.
+# The class lives in the ratify-log Worker (see wrangler.log.toml) and is
+# reached here through `script_name`.
+#
+# Deploy order matters. `ratify-log` must be deployed before this project,
+# or the LOG binding resolves to nothing:
+#     npm run deploy:log      # first
+#     npm run deploy:pages    # second
+#
+# Top level == production. Preview overrides live under [env.preview].
+#
+# Secrets (never in this file; set with `wrangler pages secret put <NAME>`):
+#   DEMO_PASSPHRASE   the shared passphrase for the demo gate
+#   SESSION_SECRET    HMAC key for signing session cookies
+
+name = "ratify"
+compatibility_date = "2026-08-01"
+pages_build_output_dir = "dist"
+
+[[durable_objects.bindings]]
+name = "LOG"
+class_name = "LogDO"
+script_name = "ratify-log"
+
+[env.preview]
+
+[[env.preview.durable_objects.bindings]]
+name = "LOG"
+class_name = "LogDO"
+script_name = "ratify-log"

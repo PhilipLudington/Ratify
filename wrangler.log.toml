@@ -1,0 +1,39 @@
+# Ratify — the log Worker (ratify-log).
+#
+# This is the BACK half of the deployment and the product's real home: it
+# defines the LogDO Durable Object class, which owns all storage, runs the
+# agent loop, and executes the precedent check. It exists as its own Worker
+# only because Pages Functions cannot define Durable Object classes.
+#
+# It has no public route by design. The only way in is the LOG binding held
+# by the Pages project (see wrangler.toml).
+#
+#     wrangler deploy -c wrangler.log.toml      (npm run deploy:log)
+#
+# Deploy this BEFORE the Pages project on any change to LogDO, and always
+# before the very first Pages deploy.
+#
+# Secrets (never in this file; set with
+# `wrangler secret put <NAME> -c wrangler.log.toml`):
+#   ANTHROPIC_API_KEY   used from Phase 2, called via AI Gateway
+
+name = "ratify-log"
+main = "src/do/index.ts"
+compatibility_date = "2026-08-01"
+workers_dev = false
+
+# AI Gateway routing (PLAN.md: Sonnet 5 through Cloudflare AI Gateway).
+# ACCOUNT_ID and GATEWAY are filled in when the gateway is created in Phase 2;
+# empty values are inert until then.
+[vars]
+AI_GATEWAY_ACCOUNT_ID = ""
+AI_GATEWAY_NAME = "ratify"
+ANTHROPIC_MODEL = "claude-sonnet-5"
+
+[[durable_objects.bindings]]
+name = "LOG"
+class_name = "LogDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LogDO"]

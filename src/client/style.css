@@ -1,0 +1,149 @@
+/* Phase 0 shell styling. Deliberately small — the real surfaces (chat pane,
+   visible draft with scrutiny gauge, log view) arrive in Phases 1–2 and will
+   bring their own layout. What is here is the type scale and palette they
+   will inherit. */
+
+:root {
+  --ink: #16130f;
+  --ink-muted: #5c554c;
+  --paper: #faf7f2;
+  --rule: #ddd5c8;
+  --accent: #7a2f1d;
+  --error: #9a2617;
+
+  --measure: 34rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ede8e0;
+    --ink-muted: #a29a8e;
+    --paper: #17150f;
+    --rule: #3a352c;
+    --accent: #d98d70;
+    --error: #e2836f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 2.5rem 1.5rem 4rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.6 ui-serif, Georgia, 'Times New Roman', serif;
+}
+
+.masthead {
+  max-width: var(--measure);
+  margin: 0 auto 2.5rem;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 1rem;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.tagline {
+  margin: 0.25rem 0 0;
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.panel {
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+.panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 1.5rem 0 0;
+}
+
+label {
+  flex: 1 0 100%;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--paper);
+  font: inherit;
+  cursor: pointer;
+}
+
+button[type='button'] {
+  background: transparent;
+  color: var(--accent);
+}
+
+button.link {
+  margin-top: 1.5rem;
+  padding: 0;
+  border: 0;
+  color: var(--ink-muted);
+  text-decoration: underline;
+  font-size: 0.9rem;
+}
+
+.output {
+  margin: 1.5rem 0 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.error {
+  margin: 1rem 0 0;
+  color: var(--error);
+}

@@ -1,0 +1,7 @@
+# Copy to .dev.vars (gitignored) for local development.
+#
+# These are local-only values. Production secrets are set with
+# `wrangler pages secret put <NAME>` and never live in a file.
+
+DEMO_PASSPHRASE="local-dev-passphrase"
+SESSION_SECRET="any-long-random-string-will-do-locally"

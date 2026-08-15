@@ -1,0 +1,24 @@
+{
+  "name": "ratify",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Conversational decision-record engine on Cloudflare Pages + Workers + Durable Objects",
+  "scripts": {
+    "dev": "vite",
+    "dev:pages": "wrangler pages dev",
+    "build": "vite build",
+    "types": "wrangler types -c wrangler.log.toml",
+    "check": "npm run types && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "test": "vitest run",
+    "deploy:log": "wrangler deploy -c wrangler.log.toml",
+    "deploy:pages": "npm run build && wrangler pages deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.21.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.123.0"
+  }
+}
