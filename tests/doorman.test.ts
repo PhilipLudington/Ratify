@@ -63,6 +63,42 @@ describe('the gate', () => {
     expect(cookie.startsWith(`${COOKIE_NAME}=`)).toBe(true);
   });
 
+  // These cost three deploys and a lot of confusion to find. An interactive
+  // `wrangler secret put` can capture a trailing newline, and a passphrase
+  // copied out of submission notes arrives with a space on the end. Both look
+  // exactly like a wrong passphrase from outside.
+  it('accepts the passphrase when the stored secret has stray whitespace', async () => {
+    const response = await handleRequest(
+      request('/auth', { method: 'POST', body: JSON.stringify({ passphrase: PASSPHRASE }) }),
+      { ...doormanEnv, DEMO_PASSPHRASE: `${PASSPHRASE}\n` },
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('accepts the passphrase when the submitted value has stray whitespace', async () => {
+    const response = await handleRequest(
+      request('/auth', { method: 'POST', body: JSON.stringify({ passphrase: ` ${PASSPHRASE} ` }) }),
+      doormanEnv,
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('still refuses a wrong passphrase that only looks close', async () => {
+    const response = await handleRequest(
+      request('/auth', { method: 'POST', body: JSON.stringify({ passphrase: `${PASSPHRASE}x` }) }),
+      doormanEnv,
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it('treats a whitespace-only secret as unset rather than as a passphrase', async () => {
+    const response = await handleRequest(request('/ping'), {
+      ...doormanEnv,
+      DEMO_PASSPHRASE: '   ',
+    });
+    expect(response.status).toBe(500);
+  });
+
   it('refuses to run at all when its secrets are unset', async () => {
     const response = await handleRequest(request('/ping'), {
       ...doormanEnv,

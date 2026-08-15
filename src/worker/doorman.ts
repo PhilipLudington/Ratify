@@ -25,6 +25,11 @@ export interface DoormanEnv {
   DEMO_PASSPHRASE: string;
   /** HMAC key for session cookies. */
   SESSION_SECRET: string;
+
+  // Injected by Pages into every Function. Public build metadata, not secrets.
+  CF_PAGES_URL?: string;
+  CF_PAGES_COMMIT_SHA?: string;
+  CF_PAGES_BRANCH?: string;
 }
 
 /**
@@ -64,7 +69,13 @@ async function handleAuth(request: Request, env: DoormanEnv): Promise<Response> 
     return json({ error: 'Expected a JSON body.' }, { status: 400 });
   }
 
-  if (!submitted || !constantTimeEqual(submitted, env.DEMO_PASSPHRASE)) {
+  // Both sides are trimmed before comparison. A passphrase whose meaning
+  // depends on a leading or trailing space is a passphrase nobody can type
+  // reliably, and the ways one arrives are many: a newline captured by an
+  // interactive `wrangler secret put` prompt, a space picked up copying the
+  // value out of submission notes. Trimming costs nothing real and removes a
+  // failure that is indistinguishable from a wrong passphrase at the door.
+  if (!submitted.trim() || !constantTimeEqual(submitted.trim(), env.DEMO_PASSPHRASE.trim())) {
     // Deliberately uniform: no distinction between empty and wrong.
     return json({ error: 'That passphrase is not recognised.' }, { status: 401 });
   }
@@ -94,7 +105,9 @@ export async function handleRequest(request: Request, env: DoormanEnv): Promise<
   // The response names which secrets are absent but never their values: the
   // names are already public in this repository, and a deploy that silently
   // refuses every request without saying why costs far more than it protects.
-  const missing = (['DEMO_PASSPHRASE', 'SESSION_SECRET'] as const).filter((name) => !env[name]);
+  const missing = (['DEMO_PASSPHRASE', 'SESSION_SECRET'] as const).filter(
+    (name) => !env[name]?.trim(),
+  );
   if (missing.length > 0) {
     return json(
       { error: 'Server is not configured.', missing },
@@ -104,6 +117,23 @@ export async function handleRequest(request: Request, env: DoormanEnv): Promise<
 
   const url = new URL(request.url);
   const path = url.pathname.startsWith('/api') ? url.pathname.slice(4) || '/' : url.pathname;
+
+  // Which build is actually serving this request. Answered before the config
+  // check, so it still works on a deployment that is refusing everything else,
+  // and ungated, because it reveals nothing a public repository does not.
+  // A hostname alias can point at an older deployment than the one just
+  // pushed, which otherwise looks exactly like a wrong passphrase.
+  if (path === '/version' && request.method === 'GET') {
+    return json({
+      deployment: env.CF_PAGES_URL ?? null,
+      commit: env.CF_PAGES_COMMIT_SHA ?? null,
+      branch: env.CF_PAGES_BRANCH ?? null,
+      secretsPresent: {
+        DEMO_PASSPHRASE: Boolean(env.DEMO_PASSPHRASE),
+        SESSION_SECRET: Boolean(env.SESSION_SECRET),
+      },
+    });
+  }
 
   if (path === '/auth' && request.method === 'POST') {
     return handleAuth(request, env);
