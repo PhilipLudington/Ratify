@@ -110,8 +110,16 @@ and comes back, live on the real hostname.
       them (completed 2026-08-15)
 - [x] Add `LICENSE` (FSL-1.1-MIT) and the initial `README.md` (completed
       2026-08-15)
-- [ ] Set secrets (`DEMO_PASSPHRASE`, `SESSION_SECRET`, `ANTHROPIC_API_KEY`)
-- [ ] Deploy; attach the custom hostname; confirm both URLs serve
+- [ ] Set secrets — `SESSION_SECRET` done for production and preview
+      (generated and piped, never printed, 2026-08-15); `DEMO_PASSPHRASE` and
+      `ANTHROPIC_API_KEY` outstanding, both deliberately left to be set by
+      hand so no secret value passes through a session transcript
+- [ ] Deploy; attach the custom hostname; confirm both URLs serve — both
+      deployments are live (`ratify-log` uploaded with no routes as designed;
+      Pages at <https://ratify-4pp.pages.dev>, 2026-08-15). The custom hostname
+      is outstanding: wrangler 4.123 has no `pages domain` command, so
+      `ratify.philipludington.com` must be attached from the dashboard, and
+      only if that zone is on this account
 - [x] Flip the repo public (DESIGN.md: history in the open from day one)
       (completed 2026-08-15, after a full-history secret scan came back clean)
 
@@ -124,7 +132,10 @@ cookies reach two different DOs and cannot see each other's value.
 
 ### Phase 0 Readiness Gate
 
-- [ ] Production URL responds behind the gate
+- [ ] Production URL responds behind the gate — the client serves and the
+      doorman's fail-loud path is verified live (a missing secret returns 500
+      rather than opening the gate, 2026-08-15); the gate itself cannot be
+      exercised until `DEMO_PASSPHRASE` is set
 - [x] DO storage survives across requests within a session (test + local HTTP,
       2026-08-15)
 - [x] Session isolation verified — two cookies reach two different DO IDs and

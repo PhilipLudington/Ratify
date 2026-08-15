@@ -121,6 +121,8 @@ semantics, not a mock.
 
 ## Demo access
 
+**<https://ratify-4pp.pages.dev>**
+
 The deployed demo is behind a shared passphrase. This is cost protection, not
 secrecy: the gate keeps automated traffic off the language-model endpoint.
 Per-session rate limits inside the Durable Object back it up.
