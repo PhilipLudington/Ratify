@@ -16,8 +16,9 @@ ordering means a schedule slip costs polish, never a demoable product.
 Timeline: ~2–3 weeks, unhurried, with room to playtest the challenge
 calibration before submission.
 
-**Current status:** Phase 0 in progress — everything buildable locally is done
-and green; the remaining tasks all need the Cloudflare account.
+**Current status:** Phase 0 complete but for the custom hostname. Both halves
+are deployed, the gate is verified end to end in production
+(`scripts/verify-gate.sh`, 17/17), and Phase 1 is unblocked.
 
 ### Open Questions Closed Here
 
@@ -58,6 +59,25 @@ DESIGN.md deferred five decisions to this document. All five are now decided:
   ordered deploy (`deploy:log` before `deploy:pages`) and a two-process local
   dev loop; Wrangler's dev registry connects the two automatically, verified
   working in Phase 0.
+- **The demo passphrase is set by script, never by hand.** Getting the gate
+  working in production cost most of a day and seven deploys, across three
+  distinct failures that are *indistinguishable from outside* — each one
+  presented as a flat 401 or 500:
+  1. `wrangler pages secret put`, prompted with no TTY behind it, uploads an
+     **empty value** and reports success; `pages secret list` then shows the
+     secret as present.
+  2. Pages **binds secrets at deploy time**, so setting one changes nothing
+     until the next `npm run deploy:pages` — and the binding lags the
+     deployment flip by a few seconds even after `/api/version` reports the
+     new build live.
+  3. Setting and checking the passphrase used **two separate prompts**, and any
+     divergence between them looks exactly like a wrong passphrase.
+  The fix for all three is `scripts/set-passphrase.sh`: read the value once,
+  pipe it to wrangler, deploy, poll `/api/version` for the specific new build,
+  and verify using the value still in memory. `GET /api/version` exists to tell
+  these cases apart in one request, and `scripts/verify-gate.sh` retries before
+  believing a refusal. Phase 6's cold demo run will want all of this.
+
 - **Types come from `wrangler types`, not `@cloudflare/workers-types`.**
   Wrangler now generates runtime types plus a `Cloudflare.Env` derived from the
   config, and supersedes the types package. `worker-configuration.d.ts` is
@@ -110,25 +130,19 @@ and comes back, live on the real hostname.
       them (completed 2026-08-15)
 - [x] Add `LICENSE` (FSL-1.1-MIT) and the initial `README.md` (completed
       2026-08-15)
-- [ ] Set secrets — `SESSION_SECRET` done for production and preview;
-      `DEMO_PASSPHRASE` currently holds a **throwaway** value, generated and
-      piped so it was never printed, which means nobody knows it and the demo
-      is effectively closed until the real one is set. `ANTHROPIC_API_KEY` is
-      outstanding and not needed before Phase 2. All values are set by pipe or
-      by hand rather than echoed, because Phase 6 turns these sessions into a
-      public prompt history.
-      **Gotcha, learned the hard way:** Pages binds secrets at deploy time, so
-      setting one has no effect until the next `npm run deploy:pages`. Worse,
-      `wrangler pages secret put` run through a non-TTY prompt silently uploads
-      an *empty* value — which is what made the gate 500 on every request while
-      `pages secret list` cheerfully showed the secret as present. Pipe the
-      value in, or run it in a real terminal.
-- [ ] Deploy; attach the custom hostname; confirm both URLs serve — both
-      deployments are live (`ratify-log` uploaded with no routes as designed;
-      Pages at <https://ratify-4pp.pages.dev>, 2026-08-15). The custom hostname
-      is outstanding: wrangler 4.123 has no `pages domain` command, so
-      `ratify.philipludington.com` must be attached from the dashboard, and
-      only if that zone is on this account
+- [x] Set secrets — `SESSION_SECRET` (production and preview) and
+      `DEMO_PASSPHRASE`, both live and verified 2026-08-15. No value was ever
+      echoed, because Phase 6 turns these sessions into a public prompt
+      history. `ANTHROPIC_API_KEY` moved to Phase 2, where it is first used.
+      Set the passphrase with `scripts/set-passphrase.sh`, never by hand —
+      see the note below for why.
+- [x] Deploy both halves; confirm the `pages.dev` URL serves — `ratify-log`
+      uploaded with no routes as designed, Pages live at
+      <https://ratify-4pp.pages.dev> (2026-08-15)
+- [ ] Attach the custom hostname `ratify.philipludington.com` — wrangler 4.123
+      has no `pages domain` command, so this is a dashboard action, and only
+      possible if that zone is on the "Mr. Phil Games" account. The `pages.dev`
+      URL is the named fallback, so nothing downstream is blocked.
 - [x] Flip the repo public (DESIGN.md: history in the open from day one)
       (completed 2026-08-15, after a full-history secret scan came back clean)
 
@@ -226,6 +240,9 @@ a visible draft record as it goes.
 
 ### Tasks
 
+- [ ] Set `ANTHROPIC_API_KEY` on `ratify-log`
+      (`wrangler secret put ANTHROPIC_API_KEY -c wrangler.log.toml`); moved
+      here from Phase 0, where it was listed but not yet used
 - [ ] Configure the AI Gateway endpoint; route Anthropic calls through it
 - [ ] Implement the streaming agent loop inside the DO (`POST /api/chat`, SSE out)
 - [ ] Persist conversation history and draft state atomically per turn

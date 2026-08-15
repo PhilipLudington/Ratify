@@ -157,21 +157,44 @@ deployed values are set through Wrangler.
 | `SESSION_SECRET` | Pages | HMAC key for session cookies |
 | `ANTHROPIC_API_KEY` | `ratify-log` | the agent, called via Cloudflare AI Gateway |
 
+To change the demo passphrase, use the script. It reads the value once, uploads
+it, deploys, waits for that exact build to go live, and verifies the gate with
+the value still in memory:
+
 ```sh
-wrangler pages secret put DEMO_PASSPHRASE --project-name ratify
-wrangler pages secret put SESSION_SECRET --project-name ratify
+scripts/set-passphrase.sh
+```
+
+Do not set that one by hand. Three separate failure modes here are
+indistinguishable from outside — each surfaces as a flat 401 or 500 — and the
+script exists because working that out cost an afternoon:
+
+- **`wrangler pages secret put` can upload nothing and report success.** With
+  no TTY behind its prompt it stores an *empty string*, after which
+  `wrangler pages secret list` shows the secret as present while every request
+  fails.
+- **Pages binds secrets at deploy time.** Setting one changes nothing until the
+  next `npm run deploy:pages`, and the binding trails the deployment flip by a
+  few seconds even after `/api/version` reports the new build live.
+- **Setting and checking used to be two prompts**, and any divergence between
+  them looks exactly like a wrong passphrase.
+
+The other secrets are ordinary:
+
+```sh
+printf '%s' "$VALUE" | wrangler pages secret put SESSION_SECRET --project-name ratify
 wrangler secret put ANTHROPIC_API_KEY -c wrangler.log.toml
 ```
 
-Two things about Pages secrets that will otherwise cost you an afternoon:
+When a deployed stack misbehaves, start here:
 
-- **They bind at deploy time.** Setting a secret does nothing to the running
-  site until the next `npm run deploy:pages`.
-- **Run them attached to a real terminal.** `wrangler pages secret put` prompts
-  for the value, and a prompt with no TTY behind it uploads an *empty string*
-  and still reports success — after which `wrangler pages secret list` shows
-  the secret as present while every request fails. Pipe the value instead if
-  you are not at a terminal: `printf '%s' "$VALUE" | wrangler pages secret put …`
+```sh
+curl https://ratify-4pp.pages.dev/api/version
+```
+
+It reports which deployment is answering, its commit, and whether each secret
+is present — enough to tell a stale alias, an empty secret, and a wrong
+passphrase apart in one request.
 
 ## License
 
