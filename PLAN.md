@@ -191,7 +191,10 @@ renders in the log view before any agent exists.
 
 ### Tasks
 
-- [ ] Define the `Record` and `Index` types in `src/shared/record.ts`
+- [x] Define the record and `Index` types in `src/shared/record.ts` (completed
+      2026-08-16). The record type is named `AdrRecord`, not `Record` — the
+      latter shadows TypeScript's built-in `Record<K, V>` utility type, which
+      a module shared by the DO and the client must not do.
 - [ ] Implement frontmatter + section serialization and its inverse parse
 - [ ] Round-trip property test: `parse(serialize(r))` deep-equals `r`
 - [ ] Implement DO storage accessors for every key in the schema
