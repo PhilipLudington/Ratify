@@ -1,6 +1,6 @@
 # RESUME — Ratify Phase 1: The Log
 
-**Last updated:** 2026-08-16 (record/Index types landed)
+**Last updated:** 2026-08-20 (DO storage accessors + meta counter landed)
 **Branch:** main (all work commits directly to main — see Open Threads)
 **Related:** [PLAN.md](PLAN.md) Phase 1; Phase 0 complete but for one task
 
@@ -51,22 +51,40 @@ rendering in a log view, before any agent exists.
       (named so because `Record` shadows TS's built-in utility type), `Index`,
       `Scrutiny`, `RecordSections`, `HistoryEntry`, plus `citeAdr()`. Both
       tsconfigs already included `src/shared/`; build and tests green (36)
+- [x] `src/shared/format.ts` — `serializeRecord` / `parseRecord` /
+      `RecordFormatError` (2026-08-16): zero-dependency, strict-canonical,
+      fail-loud parser for the house format (not general YAML/Markdown).
+      Emitted frontmatter is still valid plain YAML so exports read in
+      standard tools. Divergence from DESIGN.md's sketch, recorded in
+      PLAN.md: objections tally serializes as `{open: n, addressed: m}`, not
+      the lossy `1-open` shorthand. A scrutiny value carrying any extra
+      field (e.g. "rightness") fails to parse — the gauge prohibition
+      enforced at the format layer, with a test pinning it
+- [x] `tests/record-format.test.ts` (2026-08-16): seeded-PRNG round-trip
+      property test (300 generated records, no new dependency), byte-
+      stability `serialize(parse(text)) === text` (what makes Phase 5's
+      "exports re-parse losslessly" gate checkable), the shapes PLAN.md's
+      testing strategy names, and strict-rejection cases. Suite now 58
+      passing; `./run-build.sh` green
+- [x] `src/do/storage.ts` — `LogStorage` accessors for every schema key
+      (2026-08-20): `meta`, `index`, `record:{n}`, `record:{n}:v{k}`, `draft`.
+      Records and snapshots store canonical Markdown **text** as the single
+      truth (decision committed — see Open Threads); `putRecord` serializes
+      (so nothing malformed reaches disk), `getRecord` parses fail-loud,
+      `putSnapshot` validates the text parses and is the right ADR. `Meta` is
+      `{schemaVersion: 1, nextNumber, created, kind}`; `initMeta` throws on
+      re-init; `allocateNumber()` is the only number source. `Draft`'s empty
+      shape is fixed (`emptyDraft()`): title, sections, supersedes,
+      precedent, objections tally, `conversation: unknown[]` (element shape
+      is Phase 2's). `tests/log-storage.test.ts` runs it all in the real DO
+      via `runInDurableObject` — suite now 79 passing, build green. Nothing
+      in `LogDO.fetch` uses `LogStorage` yet; the seeding and read-API tasks
+      wire it in
 
 ## Next Steps
 
 Phase 1's tasks, in PLAN.md order. The first item is the literal next action.
 
-- [ ] Implement frontmatter + section serialization and its inverse parse
-      (house format is MADR-shaped; see DESIGN.md § The Record Format). The
-      scrutiny frontmatter's compact forms — `objections: 1-open`, the flow
-      style in DESIGN.md's example — are a serializer concern; the types keep
-      objections structured as `{open, addressed}`
-- [ ] Round-trip property test: `parse(serialize(r))` deep-equals `r`
-- [ ] Implement DO storage accessors for every key in the schema — `meta`,
-      `index`, `record:{n}`, `record:{n}:v{k}`, `draft`. The version-trail keys
-      ship now even though no amendment UI ever does in v0
-- [ ] Implement `meta` with the next-number counter (never reused, never
-      renumbered, sourced solely from `meta`)
 - [ ] Author six starter ADRs for a fictional team: datastore choice, a
       managed-services-first rule, a queue decision, a deploy-target decision,
       a superseded early call, and one record carrying an open objection
@@ -78,6 +96,29 @@ Phase 1's tasks, in PLAN.md order. The first item is the literal next action.
 
 ## Open Threads / Half-Made Decisions
 
+- **Stored form of a record: DECIDED and committed (2026-08-20) — canonical
+  Markdown text, not JSON.** `src/do/storage.ts` stores serialized text under
+  `record:{n}` and `record:{n}:v{k}`; no JSON twin exists anywhere. The three
+  reasons that forced it: Principle 1 makes the plain file *the* record;
+  Phase 4's quote verification substring-checks the stored text; and
+  byte-stability is pinned by test. Do not add a parallel representation.
+- **`meta` shape: DECIDED (2026-08-20).** `{schemaVersion: 1, nextNumber,
+  created, kind: 'sandbox'|'named'}`. No separate `seeded` flag — `meta`'s
+  *presence* is the initialized marker, because seeding must write `meta` in
+  the same DO invocation that writes the seed records. `initMeta` throws if
+  meta exists (re-init would reset the counter).
+- **The `draft` key's empty shape: DECIDED (2026-08-20).** `emptyDraft()` in
+  `src/do/storage.ts`: empty title/sections, `supersedes: []`,
+  `precedent: 'unchecked'`, `objections: {open: 0, addressed: 0}`,
+  `conversation: []`. `precedent` and the objections tally are stored
+  explicitly because they are facts about the conversation, not derivable
+  from section text; section coverage and the alternatives count are derived
+  from `sections` and never stored. The `conversation` element shape is
+  deliberately `unknown` — Phase 2 owns it, and an empty array migrates for
+  free.
+- **`IndexEntry.decision` one-liner: leaning derived** (first sentence of
+  `## Decision`) over separately authored, because the index is denormalized
+  and "the record is the truth" is the documented rule. Not yet committed.
 - **The seed ADRs are the highest-risk item in Phase 1**, and their risk is not
   technical. PLAN.md's risk register flags "seeds produce contrived rather than
   natural conflicts" as high-impact. Author them against the decisions a
@@ -119,7 +160,7 @@ Phase 1's tasks, in PLAN.md order. The first item is the literal next action.
 Phase 1 is done when its readiness gate passes:
 
 - [ ] A brand-new session shows six seeded records
-- [ ] Record format round-trips losslessly, verified by test
+- [x] Record format round-trips losslessly, verified by test (2026-08-16)
 - [ ] The seeded log contains at least one supersession chain and one open
       objection
 - [ ] Numbering is monotonic and sourced solely from `meta`
@@ -127,7 +168,7 @@ Phase 1 is done when its readiness gate passes:
 The gates to run:
 
 ```sh
-./run-tests.sh     # must stay green; currently 36 passing
+./run-tests.sh     # must stay green; currently 79 passing
 ./run-build.sh     # typechecks both halves, builds, dry-runs the DO Worker
 ```
 

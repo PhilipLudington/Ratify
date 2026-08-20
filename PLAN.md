@@ -195,10 +195,32 @@ renders in the log view before any agent exists.
       2026-08-16). The record type is named `AdrRecord`, not `Record` — the
       latter shadows TypeScript's built-in `Record<K, V>` utility type, which
       a module shared by the DO and the client must not do.
-- [ ] Implement frontmatter + section serialization and its inverse parse
-- [ ] Round-trip property test: `parse(serialize(r))` deep-equals `r`
-- [ ] Implement DO storage accessors for every key in the schema
-- [ ] Implement `meta` with the next-number counter (never reused, never renumbered)
+- [x] Implement frontmatter + section serialization and its inverse parse
+      (completed 2026-08-16, `src/shared/format.ts`). Zero-dependency,
+      strict-canonical, fail-loud; emitted frontmatter stays valid YAML so
+      exports read in standard tools. One divergence from DESIGN.md's sketch:
+      the objections tally serializes as `{open: n, addressed: m}` rather
+      than the lossy `1-open` shorthand — the tally is two facts and export
+      may not drop one (Principle 1).
+- [x] Round-trip property test: `parse(serialize(r))` deep-equals `r`
+      (completed 2026-08-16, `tests/record-format.test.ts` — 300 seeded
+      generated records, plus byte-stability `serialize(parse(text)) === text`
+      and strict-rejection cases)
+- [x] Implement DO storage accessors for every key in the schema (completed
+      2026-08-20, `src/do/storage.ts` + `tests/log-storage.test.ts`). Settles
+      the stored-form question: `record:{n}` and `record:{n}:v{k}` hold the
+      canonical Markdown **text**, not JSON — stored bytes and exported bytes
+      are identical by construction (Principle 1), and Phase 4's substring
+      check runs against exactly what is on disk. No JSON twin is stored,
+      ever. The `draft` key's empty shape is fixed now so Phase 2 fills it
+      without a migration.
+- [x] Implement `meta` with the next-number counter (never reused, never
+      renumbered) (completed 2026-08-20). Shape:
+      `{schemaVersion: 1, nextNumber, created, kind: sandbox|named}`.
+      `meta`'s presence is the initialized marker — no separate `seeded`
+      flag — and `initMeta` throws on re-init, because resetting the counter
+      is the one corruption the log cannot recover from. Numbers come only
+      from `allocateNumber()`.
 - [ ] **Seed the sandbox:** author six starter ADRs for a fictional team,
       covering datastore choice, a managed-services-first rule, a queue
       decision, a deploy-target decision, a superseded early call, and one
