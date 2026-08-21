@@ -221,10 +221,22 @@ renders in the log view before any agent exists.
       flag — and `initMeta` throws on re-init, because resetting the counter
       is the one corruption the log cannot recover from. Numbers come only
       from `allocateNumber()`.
-- [ ] **Seed the sandbox:** author six starter ADRs for a fictional team,
+- [x] **Seed the sandbox:** author six starter ADRs for a fictional team,
       covering datastore choice, a managed-services-first rule, a queue
       decision, a deploy-target decision, a superseded early call, and one
-      record carrying an open objection
+      record carrying an open objection (completed 2026-08-21,
+      `src/do/seeds.ts` + `tests/seeds.test.ts`). The team is **Latchkey**,
+      four engineers building appointment scheduling for repair shops; the
+      quotable conflict lines target the decisions a reviewer actually
+      brings — a broker (ADR-4), a second datastore (ADR-3), Kubernetes
+      (ADR-5), self-hosting anything (ADR-2). ADR-1→ADR-3 is the
+      supersession chain; ADR-6 (monorepo) carries the open objection.
+      Seeds are authored as `AdrRecord` values so the serializer validates
+      them on the way to disk, and tests pin the invariants the real ratify
+      path will enforce (mirrored links, scrutiny consistent with sections,
+      no `unchecked` precedent). One small ruling made here: supersession
+      appends a history line to the *superseded* record
+      (`superseded by ADR-3`) — Phase 3's supersede path should do the same.
 - [ ] Wire self-seeding on first wake when storage is empty; named logs seed empty
 - [ ] Build the log view: index list with status badges, record detail page
 - [ ] Render supersession links in both directions in the detail view
