@@ -237,7 +237,15 @@ renders in the log view before any agent exists.
       no `unchecked` precedent). One small ruling made here: supersession
       appends a history line to the *superseded* record
       (`superseded by ADR-3`) — Phase 3's supersede path should do the same.
-- [ ] Wire self-seeding on first wake when storage is empty; named logs seed empty
+- [x] Wire self-seeding on first wake when storage is empty; named logs seed
+      empty (completed 2026-08-21, `LogDO.ensureInitialized`). The DO cannot
+      recover its own name from `state.id`, so the doorman stamps
+      `X-Ratify-Log-Kind` on every forwarded request; the DO refuses (400)
+      requests that omit it and refuses (500) a kind that contradicts stored
+      `meta`, before serving anything. Seed numbers are pulled through
+      `allocateNumber()` one at a time — numbering stays sourced solely from
+      `meta` even for fiction — and `blockConcurrencyWhile` plus the output
+      gate make first wake atomic: no request ever observes a half-seeded log.
 - [ ] Build the log view: index list with status badges, record detail page
 - [ ] Render supersession links in both directions in the detail view
 - [ ] Add `GET /api/log` and `GET /api/record/:n` through the Worker

@@ -97,6 +97,10 @@ async function forwardToLog(
 ): Promise<Response> {
   const forwarded = new Request(`${DO_ORIGIN}${path}${search}`, request);
   forwarded.headers.set('X-Ratify-Session', sessionId);
+  // The DO cannot recover its name from its ID, so the addresser says what it
+  // addressed: session-derived logs are sandboxes, and the kind decides what
+  // a first wake seeds. Named logs will send "named" when that path exists.
+  forwarded.headers.set('X-Ratify-Log-Kind', 'sandbox');
   return sandboxStub(env, sessionId).fetch(forwarded);
 }
 
