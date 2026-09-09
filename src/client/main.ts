@@ -168,18 +168,38 @@ async function route(): Promise<void> {
   }
 }
 
+/**
+ * The gate's own refusal line. The gate stays where it is: the form is the
+ * way forward from every one of these, so replacing it with a message screen
+ * would take away the control the reader needs.
+ */
+function showGateError(message: string): void {
+  gateError.textContent = message;
+  gateError.hidden = false;
+}
+
 gateForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   gateError.hidden = true;
 
-  const response = await api('/auth', {
-    method: 'POST',
-    body: JSON.stringify({ passphrase: passphrase.value }),
-  });
+  // A request that never reaches the server rejects rather than answering.
+  // Unhandled, that leaves the one screen where silence is least affordable:
+  // the reader has typed the passphrase, pressed the button, and nothing on
+  // the page has changed — which is indistinguishable from a dead button.
+  let response: Response;
+  try {
+    response = await api('/auth', {
+      method: 'POST',
+      body: JSON.stringify({ passphrase: passphrase.value }),
+    });
+  } catch {
+    // What is in the box is not what failed, so it stays as typed and
+    // unselected: pressing the button again is the whole retry.
+    return showGateError('Ratify could not be reached. Check your connection and try again.');
+  }
 
   if (!response.ok) {
-    gateError.textContent = await failureMessage(response, 'Could not verify that passphrase.');
-    gateError.hidden = false;
+    showGateError(await failureMessage(response, 'Could not verify that passphrase.'));
     passphrase.select();
     return;
   }

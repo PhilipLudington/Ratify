@@ -47,9 +47,9 @@ tests, all failing on the unfixed tree.
 
 ---
 
-## [ ] Bug 2: The passphrase form gives no answer when the server is unreachable
+## [x] Bug 2: The passphrase form gives no answer when the server is unreachable
 
-**Status:** Open
+**Status:** Fixed
 
 **Description:** The gate's submit handler awaits `api('/auth')` with no error path
 around it (`src/client/main.ts:165`). It is the fourth server call in the file with
@@ -73,5 +73,20 @@ unhandled promise rejection.
 
 **Found by:** /qa-review on bug-1-blank-page-on-session-failure, 2026-09-09 — QA
 Generalist Review (PRE-EXISTING); verified by reading `src/client/main.ts:161-180`.
+
+**Fix:** The submit handler now wraps the `/auth` call and tells the three outcomes
+apart — through, refused, or never arrived (`src/client/main.ts`). The last two both
+land in `#gate-error` through a small `showGateError()`, and the gate stays where it
+is rather than being replaced by a message screen: the form is the way forward from
+both, so taking it away would remove the control the reader needs. Only a refusal
+selects the passphrase, because only a refusal implicates it; an unreachable server
+leaves the value as typed, so pressing the button again is the whole retry. This was
+the last of the file's four unguarded server calls — `start()`, `route()` and the
+logout handler were closed by Bug 1.
+
+**Test:** `tests/client/routing.test.ts` — three tests hung off `signIn()`, which
+until now drove only the success path. "says so in the gate when the passphrase
+cannot be sent at all" is the regression test, and fails on the unfixed tree with
+`#gate-error` still hidden.
 
 ---
