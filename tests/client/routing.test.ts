@@ -104,11 +104,17 @@ function navigate(hash: string): void {
   window.dispatchEvent(new Event('hashchange'));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   document.body.innerHTML = PAGE;
-  window.location.hash = '';
   pendingRecord = null;
   overrides = {};
+
+  // Clearing a hash the last test left behind fires a `hashchange` of its
+  // own. Let it land here, against the module instance that is on its way
+  // out, rather than during the next test's boot — where it would route the
+  // fresh instance to the log behind whatever that test is asserting.
+  window.location.hash = '';
+  await settle();
 
   vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
     const url = String(input);
