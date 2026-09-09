@@ -149,10 +149,20 @@ async function route(): Promise<void> {
     if (number === null) showIndex(entries);
     else await showRecord(number, entries, current);
   } catch (error) {
-    // A 401 is answered whatever the generation: the session is gone, and
-    // every later request would reach the same conclusion.
-    if (error instanceof NotAuthenticated) return showGate();
+    // The generation is checked before the error is read, a 401 included. A
+    // refusal only describes the session the request was sent under, and a
+    // logout-and-login round trip can finish while a record fetch is still in
+    // flight: answering that stale 401 would paint the gate over a session
+    // the server has just agreed to.
+    //
+    // What replaces it is narrower than it looks: the next request that
+    // *reaches the server* reports a session that is gone. That can be a
+    // while — `fetchIndex` serves the cached index without asking, so a
+    // reader who goes back to the log makes no request at all and sees a
+    // live-looking log until they open a record. The index on screen is one
+    // this session was given, so the wait costs a cue, not a permission.
     if (!current()) return;
+    if (error instanceof NotAuthenticated) return showGate();
 
     showMessage(error instanceof Error ? error.message : String(error));
   }

@@ -108,6 +108,12 @@ function navigate(hash: string): void {
   window.dispatchEvent(new Event('hashchange'));
 }
 
+/** Answer the gate the way a reader does: type something, submit the form. */
+function signIn(value = 'open sesame'): void {
+  (panel('passphrase') as HTMLInputElement).value = value;
+  panel('gate-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
 beforeEach(async () => {
   document.body.innerHTML = PAGE;
   pendingRecord = null;
@@ -131,6 +137,7 @@ beforeEach(async () => {
       return pendingRecord.promise;
     }
     if (url === '/api/logout') return Promise.resolve(jsonResponse({ authenticated: false }));
+    if (url === '/api/auth') return Promise.resolve(jsonResponse({ authenticated: true }));
     throw new Error(`unexpected fetch: ${url}`);
   });
 
@@ -212,6 +219,37 @@ describe('navigation', () => {
     expect(panel('gate').hidden).toBe(false);
     expect(panel('record').hidden).toBe(true);
     expect(document.querySelector('.record-title')).toBeNull();
+  });
+
+  // A 401 describes the session its own request was sent under, and nothing
+  // more. The reader can log out and back in while a record fetch is still
+  // open; answering that fetch's refusal would paint the gate over a session
+  // the server has just issued a cookie for, and ask for a passphrase that
+  // has already been given.
+  it('does not gate a fresh session on a 401 left over from the session before it', async () => {
+    await boot();
+
+    navigate('#/adr/3');
+    await settle();
+    const stale = pendingRecord!;
+
+    navigate('#/');
+    await settle();
+
+    panel('logout').click();
+    await settle();
+    expect(panel('gate').hidden).toBe(false);
+
+    signIn();
+    await settle();
+    expect(panel('log').hidden).toBe(false);
+
+    // The previous session's record fetch answers last, refused.
+    stale.resolve(jsonResponse({ error: 'Not authenticated.' }, 401));
+    await settle();
+
+    expect(panel('gate').hidden).toBe(true);
+    expect(panel('log').hidden).toBe(false);
   });
 
   it('drops a stale record response when the reader opened a different record', async () => {
@@ -304,6 +342,39 @@ describe('failure paths', () => {
     overrides['/api/session'] = () => Promise.resolve(jsonResponse({ authenticated: false }));
 
     await boot();
+
+    expect(panel('gate').hidden).toBe(false);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(true);
+  });
+
+  // The other side of the same reordering: a refusal that *is* the live
+  // navigation's own still ends in the gate, not in a message about a log
+  // that could not be read.
+  it('shows the gate when the live request is the one refused', async () => {
+    overrides['/api/log'] = () =>
+      Promise.resolve(jsonResponse({ error: 'Not authenticated.' }, 401));
+
+    await boot();
+
+    expect(panel('gate').hidden).toBe(false);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(true);
+  });
+
+  // The quadrant the pair above leaves empty, and the one production reaches
+  // first: a refusal on the reader's *own* record navigation. `fetchIndex`
+  // serves the cached index without asking the server, so once the log has
+  // been read a session that expires is observed only here.
+  it('shows the gate when a live record navigation is refused', async () => {
+    await boot();
+
+    navigate('#/adr/3');
+    await settle();
+    expect(pendingRecord).not.toBeNull();
+
+    pendingRecord!.resolve(jsonResponse({ error: 'Not authenticated.' }, 401));
+    await settle();
 
     expect(panel('gate').hidden).toBe(false);
     expect(panel('log').hidden).toBe(true);
