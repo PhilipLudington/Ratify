@@ -94,14 +94,20 @@ DESIGN.md deferred five decisions to this document. All five are now decided:
 
 Found issues, worked between PRs and ahead of phase work.
 
-- [ ] Bug 1 — a failed `/api/session` check renders a blank page, `src/client/main.ts:170`;
+- [x] Bug 1 — a failed `/api/session` check renders a blank page, `src/client/main.ts:170`;
       give `start()` and the logout handler the error path `route()` already has.
-      (qa-review 2026-09-08)
+      (qa-review 2026-09-08) (completed 2026-09-09 — `route()`'s catch is now
+      `showMessage`, shared by all three paths; a failed logout says so rather than
+      showing a gate the server never agreed to)
 - [ ] A stale 401 can paint the gate over a valid session, `src/client/main.ts:128-131` —
       `route()`'s catch answers `NotAuthenticated` before checking the generation, so a
       record fetch that outlives a logout-and-login round trip re-gates a live session.
       Move `if (!current()) return;` above the `NotAuthenticated` check, with a test for
       that sequence. (qa-review 2026-09-08)
+- [ ] Bug 2 — the passphrase form gives no answer when the server is unreachable,
+      `src/client/main.ts:165`; wrap the submit handler and put a plain line in
+      `#gate-error`, with the client tests that handler has never had (both the ok
+      path and the error-text path). (qa-review 2026-09-09)
 - [ ] `GET /api/version` has no test, `src/worker/doorman.ts:130` — assert its shape and
       that it answers before the config check, since it is the first thing PLAN.md tells
       a deploy investigation to curl. (qa-review 2026-09-08)

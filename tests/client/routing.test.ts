@@ -2,9 +2,10 @@
 //
 // The case this file exists for: a record fetch that resolves *after* the
 // reader has already navigated somewhere else. Painting the late response
-// leaves the URL and the screen disagreeing, and the way back from a record is
-// a link to `#/` — which, when the hash is already `#/`, fires no `hashchange`
-// and so re-routes nothing. The view would stay wrong until a reload.
+// leaves the URL and the screen disagreeing, with nothing on screen to say
+// so. The back link out of a record is a link to `#/`, which fires no
+// `hashchange` when the hash is already `#/` — it routes on the click itself
+// for exactly that case, which is its own test below.
 //
 // `main.ts` wires itself to the document and starts on import, so each test
 // builds the page, stubs `fetch`, and imports the module fresh.
@@ -53,7 +54,10 @@ const PAGE = `
     <ol id="log-index"></ol>
     <button type="button" id="logout"></button>
   </section>
-  <section id="record" hidden><article id="record-body"></article></section>
+  <section id="record" hidden>
+    <p><a href="#/" id="back" class="back">← The log</a></p>
+    <article id="record-body"></article>
+  </section>
 `;
 
 interface Deferred {
@@ -69,8 +73,9 @@ function deferred(): Deferred {
   return { promise, resolve };
 }
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
+    status,
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
 }
@@ -87,18 +92,38 @@ function panel(id: string): HTMLElement {
 /** The record fetch currently in flight, held open until a test resolves it. */
 let pendingRecord: Deferred | null = null;
 
+/**
+ * Per-test replacements for the default responses, keyed by request URL. The
+ * failure paths need a `/api/session` that refuses and a `/api/logout` that
+ * never arrives; everything else keeps answering normally.
+ */
+let overrides: Record<string, () => Promise<Response>> = {};
+
+/** What `fetch` rejects with when the server is not there at all. */
+const unreachable = (): Promise<Response> =>
+  Promise.reject(new TypeError('Failed to fetch'));
+
 function navigate(hash: string): void {
   window.location.hash = hash;
   window.dispatchEvent(new Event('hashchange'));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   document.body.innerHTML = PAGE;
-  window.location.hash = '';
   pendingRecord = null;
+  overrides = {};
+
+  // Clearing a hash the last test left behind fires a `hashchange` of its
+  // own. Let it land here, against the module instance that is on its way
+  // out, rather than during the next test's boot — where it would route the
+  // fresh instance to the log behind whatever that test is asserting.
+  window.location.hash = '';
+  await settle();
 
   vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
     const url = String(input);
+    const override = overrides[url];
+    if (override) return override();
     if (url === '/api/session') return Promise.resolve(jsonResponse({ authenticated: true }));
     if (url === '/api/log') return Promise.resolve(jsonResponse({ index: INDEX }));
     if (url.startsWith('/api/record/')) {
@@ -208,5 +233,133 @@ describe('navigation', () => {
     await settle();
 
     expect(document.querySelector('.record-title')?.textContent).toContain('ADR-1');
+  });
+});
+
+// Bug 1. Every panel ships `hidden`, so the first paint belongs to `start()`:
+// a rejection there leaves the masthead over an empty page with no way
+// forward. The same is true of logging out, which is the one control on the
+// log view that talks to the server. Both get the treatment `route` already
+// gives a failed `/api/log` — a plain message, never a blank screen.
+describe('failure paths', () => {
+  it('shows a message when the session check cannot be reached', async () => {
+    overrides['/api/session'] = unreachable;
+
+    await boot();
+
+    expect(panel('gate').hidden).toBe(true);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(false);
+    expect(panel('record-body').textContent).toMatch(/could not be reached/i);
+  });
+
+  it("shows the server's own message when the session check fails loudly", async () => {
+    overrides['/api/session'] = () =>
+      Promise.resolve(jsonResponse({ error: 'Server is not configured.' }, 500));
+
+    await boot();
+
+    expect(panel('record').hidden).toBe(false);
+    expect(panel('record-body').textContent).toContain('Server is not configured.');
+  });
+
+  it('shows a plain message when the session check answers something unparseable', async () => {
+    overrides['/api/session'] = () =>
+      Promise.resolve(new Response('<!doctype html><title>502</title>', { status: 502 }));
+
+    await boot();
+
+    expect(panel('record').hidden).toBe(false);
+    expect(panel('record-body').textContent).toMatch(/could not be reached/i);
+  });
+
+  // The cookie is the server's to clear, so a logout that never arrived has
+  // not ended anything. Showing the gate would say it had.
+  it('says so when logging out fails, rather than showing the gate', async () => {
+    await boot();
+    overrides['/api/logout'] = unreachable;
+
+    panel('logout').click();
+    await settle();
+
+    expect(panel('gate').hidden).toBe(true);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(false);
+    expect(panel('record-body').textContent).toMatch(/could not be ended/i);
+  });
+
+  it('reports a logout the server refused', async () => {
+    await boot();
+    overrides['/api/logout'] = () =>
+      Promise.resolve(jsonResponse({ error: 'Server is not configured.' }, 500));
+
+    panel('logout').click();
+    await settle();
+
+    expect(panel('gate').hidden).toBe(true);
+    expect(panel('record-body').textContent).toContain('Server is not configured.');
+  });
+
+  it('shows the gate to a visitor with no session', async () => {
+    overrides['/api/session'] = () => Promise.resolve(jsonResponse({ authenticated: false }));
+
+    await boot();
+
+    expect(panel('gate').hidden).toBe(false);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(true);
+  });
+
+  it('shows a message when the log itself cannot be read', async () => {
+    overrides['/api/log'] = () => Promise.resolve(jsonResponse({ error: 'no log here' }, 500));
+
+    await boot();
+
+    expect(panel('gate').hidden).toBe(true);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(false);
+    expect(panel('record-body').textContent).toMatch(/could not be read/i);
+  });
+
+  // The message hides the log panel, and the logout button with it. What is
+  // left on screen is the back link — whose `href="#/"` fires no `hashchange`
+  // when the hash is already `#/`, so without a click of its own the reader
+  // is left with a screen that offers nothing and a reload.
+  it('leaves a way back when the failure message lands at the log', async () => {
+    await boot();
+    navigate('#/');
+    await settle();
+
+    overrides['/api/logout'] = unreachable;
+    panel('logout').click();
+    await settle();
+    expect(panel('record').hidden).toBe(false);
+
+    delete overrides['/api/logout'];
+    panel('back').click();
+    await settle();
+
+    expect(panel('log').hidden).toBe(false);
+    expect(panel('record').hidden).toBe(true);
+  });
+
+  // A message is a navigation like any other: a record fetch still in flight
+  // when it lands must not paint over it.
+  it('drops a record response that arrives after a failure message', async () => {
+    await boot();
+
+    navigate('#/adr/3');
+    await settle();
+    expect(pendingRecord).not.toBeNull();
+
+    overrides['/api/logout'] = unreachable;
+    panel('logout').click();
+    await settle();
+
+    pendingRecord!.resolve(new Response(serializeRecord(ADR_3)));
+    await settle();
+
+    expect(panel('record-body').textContent).toMatch(/could not be ended/i);
+    expect(document.querySelector('.record-title')).toBeNull();
   });
 });

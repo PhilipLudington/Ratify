@@ -29,6 +29,7 @@ const logIndex = el('log-index');
 const logEmpty = el('log-empty');
 const recordPanel = el('record');
 const recordBody = el('record-body');
+const back = el<HTMLAnchorElement>('back');
 
 /** The index, fetched once per session and reused by both views. */
 let index: Index | null = null;
@@ -36,9 +37,9 @@ let index: Index | null = null;
 /**
  * Which navigation is the live one. A response that arrives after the reader
  * has moved on must not paint over the newer view: the URL and the screen
- * would disagree, and the way back may be a link to a hash that is already
- * current — which fires no `hashchange`, so nothing would re-route and the
- * view would stay wrong until a reload.
+ * would then disagree, and nothing on the screen would say which one is
+ * wrong. (The back link recovers such a screen — see its listener below —
+ * but a reader with no reason to distrust the view would not click it.)
  *
  * Every path that decides what is on screen advances this, `showGate`
  * included: logging out is a navigation like any other, and a record fetch
@@ -60,6 +61,28 @@ function showGate(): void {
   logPanel.hidden = true;
   recordPanel.hidden = true;
   passphrase.focus();
+}
+
+/**
+ * A plain message where the view would have been. Every failure lands here:
+ * a blank screen tells the reader nothing and offers nothing, and the panels
+ * all ship `hidden`, so nothing renders unless something says so.
+ *
+ * This is a navigation like any other — it advances the generation, so a
+ * response still in flight cannot paint over the message that replaced it.
+ */
+function showMessage(message: string): void {
+  generation += 1;
+  gate.hidden = true;
+  logPanel.hidden = true;
+  recordPanel.hidden = false;
+  renderMessage(recordBody, message);
+}
+
+/** The server's own words for a failed response, or a plain fallback. */
+async function failureMessage(response: Response, fallback: string): Promise<string> {
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  return body.error ?? fallback;
 }
 
 /** Thrown when a request comes back unauthenticated; the gate is the answer. */
@@ -102,8 +125,7 @@ async function showRecord(
     const record = parseRecord(await response.text());
     render = () => renderRecord(recordBody, record, entries);
   } else {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    const message = body.error ?? 'That record could not be read.';
+    const message = await failureMessage(response, 'That record could not be read.');
     render = () => renderMessage(recordBody, message);
   }
 
@@ -132,10 +154,7 @@ async function route(): Promise<void> {
     if (error instanceof NotAuthenticated) return showGate();
     if (!current()) return;
 
-    gate.hidden = true;
-    logPanel.hidden = true;
-    recordPanel.hidden = false;
-    renderMessage(recordBody, error instanceof Error ? error.message : String(error));
+    showMessage(error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -149,8 +168,7 @@ gateForm.addEventListener('submit', async (event) => {
   });
 
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    gateError.textContent = body.error ?? 'Could not verify that passphrase.';
+    gateError.textContent = await failureMessage(response, 'Could not verify that passphrase.');
     gateError.hidden = false;
     passphrase.select();
     return;
@@ -161,17 +179,48 @@ gateForm.addEventListener('submit', async (event) => {
 });
 
 el('logout').addEventListener('click', async () => {
-  await api('/logout', { method: 'POST' });
+  // The cookie is the server's to clear, so a logout the server never heard
+  // has ended nothing. Showing the gate would say that it had.
+  try {
+    const response = await api('/logout', { method: 'POST' });
+    if (!response.ok) {
+      return showMessage(await failureMessage(response, 'This session could not be ended.'));
+    }
+  } catch {
+    return showMessage('This session could not be ended. Check your connection and try again.');
+  }
+
   showGate();
+});
+
+// The back link is the only control a message screen leaves on the page — the
+// log panel, and the logout button in it, are hidden behind the message. Its
+// `href` fires no `hashchange` when the hash is already the log, so a message
+// rendered there would offer nothing but a reload. Route on the click itself.
+back.addEventListener('click', () => {
+  if (window.location.hash === back.hash) void route();
 });
 
 window.addEventListener('hashchange', () => void route());
 
-// Decide which face to show before the user sees either.
+// Decide which face to show before the user sees either. Nothing has been
+// painted yet at this point, so a failure here is the one that costs the most:
+// it must say something rather than leave the masthead over an empty page.
 async function start(): Promise<void> {
-  const session = (await (await api('/session')).json()) as { authenticated: boolean };
-  if (session.authenticated) await route();
-  else showGate();
+  const unreachable = 'Ratify could not be reached. Check your connection and reload.';
+
+  try {
+    const response = await api('/session');
+    if (!response.ok) return showMessage(await failureMessage(response, unreachable));
+
+    const session = (await response.json()) as { authenticated: boolean };
+    if (session.authenticated) await route();
+    else showGate();
+  } catch {
+    // Whatever the browser calls a failed fetch, the reader needs the plain
+    // version: the server is not answering, and reloading is the way back.
+    showMessage(unreachable);
+  }
 }
 
 void start();
