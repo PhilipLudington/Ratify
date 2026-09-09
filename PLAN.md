@@ -110,6 +110,12 @@ Found issues, worked between PRs and ahead of phase work.
       `src/client/main.ts:165`; wrap the submit handler and put a plain line in
       `#gate-error`, with the client tests that handler has never had (both the ok
       path and the error-text path). (qa-review 2026-09-09)
+- [ ] An expired session shows a live-looking log until the reader opens a record,
+      `src/client/main.ts:92` — `fetchIndex` serves the cached index with no request, so
+      once a stale 401 is dropped no live request is left to report the dead cookie. The
+      residue of the stale-401 fix above: documented in the comment there, not yet acted
+      on. Clearing the cached index when a stale `NotAuthenticated` is caught would cost
+      one refetch and turn the next navigation into the cue. (qa-review 2026-09-09)
 - [ ] `GET /api/version` has no test, `src/worker/doorman.ts:130` — assert its shape and
       that it answers before the config check, since it is the first thing PLAN.md tells
       a deploy investigation to curl. (qa-review 2026-09-08)
