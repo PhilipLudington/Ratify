@@ -46,3 +46,32 @@ decides what is on screen, so a record fetch still in flight cannot paint over i
 tests, all failing on the unfixed tree.
 
 ---
+
+## [ ] Bug 2: The passphrase form gives no answer when the server is unreachable
+
+**Status:** Open
+
+**Description:** The gate's submit handler awaits `api('/auth')` with no error path
+around it (`src/client/main.ts:165`). It is the fourth server call in the file with
+that shape, and the one Bug 1 did not reach: `start()`, `route()` and the logout
+handler now all render a plain message on failure, and this one still lets the
+rejection land in nothing. The handler hides `#gate-error` on entry, so a failed
+fetch leaves the form exactly as it was — the passphrase still typed, no error, no
+spinner, nothing to distinguish "wrong passphrase" from "the server is not there".
+A reviewer with a bad connection concludes the passphrase they were given is wrong.
+
+**Steps to reproduce:**
+1. Open the app so the gate is showing.
+2. Stop the local Pages dev server (or go offline).
+3. Type anything into the passphrase field and press Enter.
+
+**Expected:** A plain line in `#gate-error` saying the server could not be reached —
+the treatment the other three paths now get.
+
+**Actual:** Nothing happens. The form sits unchanged and the browser console holds an
+unhandled promise rejection.
+
+**Found by:** /qa-review on bug-1-blank-page-on-session-failure, 2026-09-09 — QA
+Generalist Review (PRE-EXISTING); verified by reading `src/client/main.ts:161-180`.
+
+---
