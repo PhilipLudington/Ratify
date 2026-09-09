@@ -149,10 +149,14 @@ async function route(): Promise<void> {
     if (number === null) showIndex(entries);
     else await showRecord(number, entries, current);
   } catch (error) {
-    // A 401 is answered whatever the generation: the session is gone, and
-    // every later request would reach the same conclusion.
-    if (error instanceof NotAuthenticated) return showGate();
+    // The generation is checked before the error is read, a 401 included. A
+    // refusal only describes the session the request was sent under, and a
+    // logout-and-login round trip can finish while a record fetch is still in
+    // flight: answering that stale 401 would paint the gate over a session
+    // the server has just agreed to. Whether the *live* session is gone is
+    // the live request's to report, and it will.
     if (!current()) return;
+    if (error instanceof NotAuthenticated) return showGate();
 
     showMessage(error instanceof Error ? error.message : String(error));
   }
