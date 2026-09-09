@@ -119,6 +119,15 @@ Found issues, worked between PRs and ahead of phase work.
 - [ ] `GET /api/version` has no test, `src/worker/doorman.ts:130` — assert its shape and
       that it answers before the config check, since it is the first thing PLAN.md tells
       a deploy investigation to curl. (qa-review 2026-09-08)
+- [ ] No CI — the repo has no `.github/workflows`, so nothing verifies a PR; both
+      PRs so far were gated only by a local `./run-build.sh` + `./run-tests.sh` run
+      on the author's machine, and GitHub reported no checks on either. Add a
+      workflow running both wrappers on push and pull_request. Check first whether
+      the suite needs `.dev.vars` (gitignored, untracked) — the runner prints
+      "Using secrets defined in .dev.vars" locally, and a clean CI checkout has
+      none; if it does, CI needs test-only values, never the real ones. Overlaps
+      Phase 6 hardening but is not gated on it. (noticed while shipping PR #2,
+      2026-09-09)
 
 ---
 
