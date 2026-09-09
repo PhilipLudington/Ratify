@@ -16,9 +16,13 @@ ordering means a schedule slip costs polish, never a demoable product.
 Timeline: ~2–3 weeks, unhurried, with room to playtest the challenge
 calibration before submission.
 
-**Current status:** Phase 0 complete but for the custom hostname. Both halves
-are deployed, the gate is verified end to end in production
-(`scripts/verify-gate.sh`, 17/17), and Phase 1 is unblocked.
+**Current status:** Phase 1 complete (2026-09-08) — a fresh session self-seeds
+six Latchkey ADRs and reads them back through `GET /api/log` and
+`GET /api/record/:n` into a log view with status badges, supersession links in
+both directions, and the stamped scrutiny. Phase 0 is complete but for the
+custom hostname; both halves are deployed and the gate is verified end to end
+in production (`scripts/verify-gate.sh`, 17/17). Phase 2 (the agent and the
+visible draft) is next, and starts by setting `ANTHROPIC_API_KEY`.
 
 ### Open Questions Closed Here
 
@@ -171,7 +175,9 @@ cookies reach two different DOs and cannot see each other's value.
 
 ---
 
-## Phase 1: The Log
+## Phase 1: The Log ✅
+
+**Status:** Complete (2026-09-08)
 
 **Goal:** Records exist, are addressable, and are visible — a seeded sandbox log
 renders in the log view before any agent exists.
@@ -246,9 +252,36 @@ renders in the log view before any agent exists.
       `allocateNumber()` one at a time — numbering stays sourced solely from
       `meta` even for fiction — and `blockConcurrencyWhile` plus the output
       gate make first wake atomic: no request ever observes a half-seeded log.
-- [ ] Build the log view: index list with status badges, record detail page
-- [ ] Render supersession links in both directions in the detail view
-- [ ] Add `GET /api/log` and `GET /api/record/:n` through the Worker
+- [x] Build the log view: index list with status badges, record detail page
+      (completed 2026-09-08, `src/client/log-view.ts` + `main.ts`). Hash
+      routing (`#/`, `#/adr/3`) so a static Pages deployment needs no rewrite
+      rule and a record's URL is still shareable. Section bodies render as
+      the stored text under `white-space: pre-wrap` rather than through a
+      Markdown renderer: what is on screen is what export hands over
+      (Principle 1), and no prose is ever built into HTML. Empty sections
+      render as an em dash with no nagging copy (Principle 4), and the
+      scrutiny stamped in frontmatter is reported as coverage — ○ ◐ ● and
+      two counts — with no target state. Phase 0's ping panel is retired
+      from the client; the DO route stays, because `scripts/verify-gate.sh`
+      still uses it.
+- [x] Render supersession links in both directions in the detail view
+      (completed 2026-09-08). Read off the record's own frontmatter —
+      `superseded_by` renders "Superseded by ADR-3", `supersedes` renders
+      "Supersedes ADR-1" — with the target's title looked up in the index.
+      Pinned at the API layer by `tests/log-api.test.ts`, which asserts both
+      directions arrive through the endpoint rather than being reconstructed
+      by the client.
+- [x] Add `GET /api/log` and `GET /api/record/:n` — implemented as DO routes
+      that the doorman forwards unchanged (departed: the task line said
+      "through the Worker", but the doorman makes no decisions, so the only
+      Worker-side work was the gate it already applies; the tests pin gate +
+      passthrough) (completed 2026-09-08). `/log` answers
+      `{index}` — an object, so later fields need no breaking change.
+      `/record/:n` answers the **stored bytes as `text/markdown`**, not JSON:
+      the plain file is the record (Principle 1), so the client parses the
+      same text export will hand a reviewer and Phase 4 will substring-check.
+      A non-canonical number (`0`, `-1`, `3.5`, `03`) is a 400; a number this
+      log does not hold is a 404.
 
 ### Testing Strategy
 
@@ -260,10 +293,14 @@ a populated, readable log with a visible supersession chain.
 
 ### Phase 1 Readiness Gate
 
-- [ ] A brand-new session shows six seeded records
-- [ ] Record format round-trips losslessly, verified by test
-- [ ] The seeded log contains at least one supersession chain and one open objection
-- [ ] Numbering is monotonic and sourced solely from `meta`
+- [x] A brand-new session shows six seeded records — a fresh cookie reaches a
+      fresh sandbox and `GET /api/log` returns ADR-1…6 (`tests/doorman.test.ts`,
+      and by hand against a local two-process stack, 2026-09-08)
+- [x] Record format round-trips losslessly, verified by test (2026-08-16)
+- [x] The seeded log contains at least one supersession chain (ADR-1→ADR-3) and
+      one open objection (ADR-6), pinned by `tests/seeds.test.ts` (2026-08-21)
+- [x] Numbering is monotonic and sourced solely from `meta` — seeding pulls
+      every number through `allocateNumber()`, pinned by test (2026-08-21)
 
 ---
 

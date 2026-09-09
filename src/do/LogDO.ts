@@ -10,6 +10,7 @@
 // works end to end: a value written on one request is still here on the next,
 // and this instance can name itself so session isolation is observable.
 
+import { citeAdr } from '../shared/record';
 import { SEEDS, seedIndex } from './seeds';
 import { LogStorage } from './storage';
 import type { LogKind } from './storage';
@@ -35,6 +36,9 @@ export const LOG_KIND_HEADER = 'X-Ratify-Log-Kind';
 
 /** Storage key holding the Phase 0 round-trip value. */
 const PING_KEY = 'ping';
+
+/** `/record/{n}` — the record number is validated, not merely captured. */
+const RECORD_PATH = /^\/record\/([^/]+)$/;
 
 export interface PingRecord {
   note: string;
@@ -70,7 +74,57 @@ export class LogDO {
       return this.json({ error: 'Method not allowed.' }, 405);
     }
 
+    if (pathname === '/log') {
+      if (request.method !== 'GET') return this.json({ error: 'Method not allowed.' }, 405);
+      return this.readIndex();
+    }
+
+    const record = RECORD_PATH.exec(pathname);
+    if (record !== null) {
+      if (request.method !== 'GET') return this.json({ error: 'Method not allowed.' }, 405);
+      return this.readRecord(record[1]!);
+    }
+
     return this.json({ error: `No route for ${pathname}.` }, 404);
+  }
+
+  /** The storage accessors. `LogStorage` holds nothing, so it is free to make. */
+  private get log(): LogStorage {
+    return new LogStorage(this.state.storage);
+  }
+
+  /**
+   * The whole index, ascending, with no recency filter — old precedent is
+   * exactly what nobody in the room remembers (DESIGN.md § The Precedent
+   * Check). It is one object rather than a bare array so later fields (a
+   * record count, the log's kind) can join it without breaking a client.
+   */
+  private async readIndex(): Promise<Response> {
+    return this.json({ index: await this.log.getIndex() });
+  }
+
+  /**
+   * One record, as the exact bytes on disk. Not JSON: the plain Markdown file
+   * *is* the record (Principle 1), so the client parses the same text export
+   * will hand a reviewer, and no second representation exists to drift from
+   * it. The shared format module is what makes both ends agree.
+   */
+  private async readRecord(raw: string): Promise<Response> {
+    if (!/^[1-9]\d*$/.test(raw)) {
+      // Never echoed back: this arrives from the URL, and a record number is
+      // a positive integer or it is nothing.
+      return this.json({ error: 'A record number is a positive integer.' }, 400);
+    }
+
+    const number = Number(raw);
+    const text = await this.log.getRecordText(number);
+    if (text === null) {
+      return this.json({ error: `${citeAdr(number)} is not in this log.` }, 404);
+    }
+
+    return new Response(text, {
+      headers: { 'Content-Type': 'text/markdown; charset=utf-8' },
+    });
   }
 
   /**
@@ -90,7 +144,7 @@ export class LogDO {
    */
   private ensureInitialized(kind: LogKind): Promise<Response | null> {
     return this.state.blockConcurrencyWhile(async () => {
-      const log = new LogStorage(this.state.storage);
+      const log = this.log;
 
       const meta = await log.getMeta();
       if (meta !== null) {

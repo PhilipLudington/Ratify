@@ -38,8 +38,13 @@ export class RecordFormatError extends Error {
   }
 }
 
-/** Section storage keys paired with their `##` headings, in canonical order. */
-const SECTIONS = [
+/**
+ * Section storage keys paired with their `##` headings, in canonical order.
+ * Exported because the log view renders the same sections under the same
+ * headings in the same order: the screen and the file agree by construction
+ * rather than by two lists kept in step by hand (Principle 1).
+ */
+export const SECTIONS = [
   ['context', 'Context'],
   ['decision', 'Decision'],
   ['alternativesConsidered', 'Alternatives Considered'],

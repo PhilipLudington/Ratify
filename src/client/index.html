@@ -32,23 +32,23 @@
         <p id="gate-error" class="error" role="alert" hidden></p>
       </section>
 
-      <!-- Phase 0 placeholder. Phases 1–4 replace this with the log view,
-           the chat pane, and the visible draft record. -->
-      <section id="shell" class="panel" hidden>
-        <h2>Phase 0 — deployed skeleton</h2>
+      <!-- The log view. The chat pane and the visible draft record join it
+           in Phase 2; this is the surface that shows what has been decided. -->
+      <section id="log" class="panel" hidden>
+        <h2>The log</h2>
         <p class="muted">
-          No agent and no records yet. This panel proves the chain end to end:
-          the request passes the gate, the doorman derives this session's
-          Durable Object, and the object remembers what it was told.
+          Every decision this log holds, oldest first. Superseded records keep
+          their number and stay readable — the log records what was decided,
+          including what was decided and then overturned.
         </p>
-        <form id="ping-form" autocomplete="off">
-          <label for="note">Write a value to this session's log</label>
-          <input id="note" name="note" type="text" placeholder="anything at all" required />
-          <button type="submit">Write</button>
-          <button type="button" id="reload">Read back</button>
-        </form>
-        <pre id="ping-output" class="output">not read yet</pre>
+        <p id="log-empty" class="muted" hidden>No records yet.</p>
+        <ol id="log-index" class="index"></ol>
         <button type="button" id="logout" class="link">Forget this session</button>
+      </section>
+
+      <section id="record" class="panel" hidden>
+        <p><a href="#/" class="back">← The log</a></p>
+        <article id="record-body"></article>
       </section>
     </main>
 

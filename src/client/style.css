@@ -1,7 +1,8 @@
-/* Phase 0 shell styling. Deliberately small — the real surfaces (chat pane,
-   visible draft with scrutiny gauge, log view) arrive in Phases 1–2 and will
-   bring their own layout. What is here is the type scale and palette they
-   will inherit. */
+/* The gate and the log view. The chat pane and the visible draft with its
+   scrutiny gauge arrive in Phase 2 and inherit this type scale and palette.
+
+   The measure stays narrow on purpose: a record is prose, and prose is read,
+   not scanned. */
 
 :root {
   --ink: #16130f;
@@ -131,19 +132,164 @@ button.link {
   font-size: 0.9rem;
 }
 
-.output {
+.error {
+  margin: 1rem 0 0;
+  color: var(--error);
+}
+
+/* --- the index list ------------------------------------------------------ */
+
+.index {
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  padding: 1rem 0;
+  border-top: 1px solid var(--rule);
+}
+
+.entry:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+.entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.entry-head:hover .entry-title,
+.entry-head:focus-visible .entry-title {
+  text-decoration: underline;
+}
+
+.cite {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.entry-title {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+
+.entry-decision {
+  margin: 0.35rem 0 0;
+  font-size: 0.95rem;
+}
+
+/* A status, worn plainly. Superseded is a fact about a record's place in the
+   chain, not a mark against it — so no colour shouts here. */
+.badge {
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.badge-ratified {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* --- the record detail --------------------------------------------------- */
+
+.back {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}
+
+.record-title {
+  margin: 1rem 0 0.5rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.record-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.date {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.supersession {
+  margin: 0.75rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--accent);
+  font-size: 0.95rem;
+}
+
+.citation {
+  white-space: normal;
+}
+
+.scrutiny {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 1rem;
   margin: 1.5rem 0 0;
   padding: 0.85rem 1rem;
   border: 1px solid var(--rule);
   border-radius: 3px;
-  overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
-  line-height: 1.5;
+}
+
+.scrutiny dt {
   color: var(--ink-muted);
 }
 
-.error {
-  margin: 1rem 0 0;
-  color: var(--error);
+.scrutiny dd {
+  margin: 0;
+}
+
+.record-section h3 {
+  margin: 2rem 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+/* The stored text, wrapped and not otherwise touched: what is on screen is
+   what export hands over, line breaks and all. */
+.prose {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.prose.empty {
+  color: var(--ink-muted);
+}
+
+.history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.95rem;
+}
+
+.history li + li {
+  margin-top: 0.25rem;
+}
+
+a {
+  color: var(--accent);
 }

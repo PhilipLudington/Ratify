@@ -77,5 +77,12 @@ single-threading makes it atomic in effect. Do not move any part of it out.
   never from model judgment. No target state, no praise, no correctness or
   "rightness" score — that last one is forbidden outright.
 - **Record numbers are never reused or renumbered**, and come only from `meta`.
-- **No secret enters git.** Local values live in `.dev.vars` (gitignored);
-  deployed values are set through Wrangler.
+- **No secret enters git, and none enters a transcript.** Local values live in
+  `.dev.vars` (gitignored); deployed values are set through Wrangler, with
+  `scripts/set-passphrase.sh` rather than by hand. Phase 6 publishes these
+  sessions as `docs/prompt-history.md`, so never echo a passphrase or ask for
+  one in a session — the demo passphrase is the human's to hold. A live gate
+  check is `scripts/verify-gate.sh`, run by the human. When a local run needs
+  to get past the gate, start a throwaway instance with a value chosen on the
+  spot (`wrangler pages dev --binding DEMO_PASSPHRASE=… SESSION_SECRET=…`,
+  which wins over `.dev.vars`) instead of reading the real one.

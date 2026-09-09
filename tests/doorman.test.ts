@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import { handleRequest, type DoormanEnv } from '../src/worker/doorman';
 import { COOKIE_NAME } from '../src/worker/session';
+import { parseRecord } from '../src/shared/format';
+import type { Index } from '../src/shared/record';
 
 const PASSPHRASE = 'open-the-log';
 
@@ -183,5 +185,30 @@ describe('forwarding to the log', () => {
   it('passes a 404 from the log through rather than inventing one', async () => {
     const response = await handleRequest(request('/nope', {}, await authenticate()), doormanEnv);
     expect(response.status).toBe(404);
+  });
+});
+
+describe('the read API', () => {
+  // The doorman adds nothing to these routes and takes nothing away: it
+  // checks the cookie, strips `/api`, and hands the request to the log.
+  it('refuses the log to a request with no session', async () => {
+    expect((await handleRequest(request('/log'), doormanEnv)).status).toBe(401);
+    expect((await handleRequest(request('/record/1'), doormanEnv)).status).toBe(401);
+  });
+
+  it('serves the seeded index to a session that has passed the gate', async () => {
+    const response = await handleRequest(request('/log', {}, await authenticate()), doormanEnv);
+
+    expect(response.status).toBe(200);
+    const { index } = (await response.json()) as { index: Index };
+    expect(index.map((entry) => entry.number)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('serves a record as the Markdown the log stored', async () => {
+    const response = await handleRequest(request('/record/3', {}, await authenticate()), doormanEnv);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('text/markdown; charset=utf-8');
+    expect(parseRecord(await response.text()).number).toBe(3);
   });
 });
