@@ -414,6 +414,59 @@ describe('failure paths', () => {
     expect(panel('record').hidden).toBe(true);
   });
 
+  // Bug 2. The gate is the one screen a reader cannot route away from, so a
+  // submit that says nothing is a dead button as far as they can tell. All
+  // three outcomes are asserted together because the handler's job is to tell
+  // them apart: through, refused, or never arrived.
+  it('shows the log when the passphrase is accepted', async () => {
+    overrides['/api/session'] = () => Promise.resolve(jsonResponse({ authenticated: false }));
+
+    await boot();
+    expect(panel('gate').hidden).toBe(false);
+
+    delete overrides['/api/session'];
+    signIn();
+    await settle();
+
+    expect(panel('gate').hidden).toBe(true);
+    expect(panel('log').hidden).toBe(false);
+    expect(panel('gate-error').hidden).toBe(true);
+    expect((panel('passphrase') as HTMLInputElement).value).toBe('');
+  });
+
+  it("shows the server's own refusal in the gate's error line", async () => {
+    overrides['/api/session'] = () => Promise.resolve(jsonResponse({ authenticated: false }));
+    overrides['/api/auth'] = () =>
+      Promise.resolve(jsonResponse({ error: 'That passphrase is not correct.' }, 401));
+
+    await boot();
+    signIn('wrong');
+    await settle();
+
+    expect(panel('gate-error').hidden).toBe(false);
+    expect(panel('gate-error').textContent).toBe('That passphrase is not correct.');
+    expect(panel('gate').hidden).toBe(false);
+    expect(panel('log').hidden).toBe(true);
+  });
+
+  // The case the handler had no answer for: `fetch` rejects, and without the
+  // wrapper the rejection goes unhandled and the page never changes.
+  it('says so in the gate when the passphrase cannot be sent at all', async () => {
+    overrides['/api/session'] = () => Promise.resolve(jsonResponse({ authenticated: false }));
+    overrides['/api/auth'] = unreachable;
+
+    await boot();
+    signIn();
+    await settle();
+
+    expect(panel('gate-error').hidden).toBe(false);
+    expect(panel('gate-error').textContent).toMatch(/could not be reached/i);
+    expect(panel('gate').hidden).toBe(false);
+    expect(panel('log').hidden).toBe(true);
+    // The value is not what failed, so it is still there to submit again.
+    expect((panel('passphrase') as HTMLInputElement).value).toBe('open sesame');
+  });
+
   // A message is a navigation like any other: a record fetch still in flight
   // when it lands must not paint over it.
   it('drops a record response that arrives after a failure message', async () => {
