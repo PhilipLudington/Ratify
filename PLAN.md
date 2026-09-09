@@ -106,10 +106,13 @@ Found issues, worked between PRs and ahead of phase work.
       that sequence. (qa-review 2026-09-08) (completed 2026-09-09 — the generation is
       now checked before the error is read; a second test pins that a 401 on the *live*
       navigation still ends in the gate)
-- [ ] Bug 2 — the passphrase form gives no answer when the server is unreachable,
+- [x] Bug 2 — the passphrase form gives no answer when the server is unreachable,
       `src/client/main.ts:165`; wrap the submit handler and put a plain line in
       `#gate-error`, with the client tests that handler has never had (both the ok
-      path and the error-text path). (qa-review 2026-09-09)
+      path and the error-text path). (qa-review 2026-09-09) (completed 2026-09-09 —
+      the handler tells through, refused and never-arrived apart; the last two share
+      `#gate-error` and leave the gate up, and only a refusal selects the passphrase.
+      Three tests hang off `signIn()`, which had driven only the success path)
 - [ ] An expired session shows a live-looking log until the reader opens a record,
       `src/client/main.ts:92` — `fetchIndex` serves the cached index with no request, so
       once a stale 401 is dropped no live request is left to report the dead cookie. The
