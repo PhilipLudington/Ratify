@@ -62,6 +62,28 @@ function showGate(): void {
   passphrase.focus();
 }
 
+/**
+ * A plain message where the view would have been. Every failure lands here:
+ * a blank screen tells the reader nothing and offers nothing, and the panels
+ * all ship `hidden`, so nothing renders unless something says so.
+ *
+ * This is a navigation like any other — it advances the generation, so a
+ * response still in flight cannot paint over the message that replaced it.
+ */
+function showMessage(message: string): void {
+  generation += 1;
+  gate.hidden = true;
+  logPanel.hidden = true;
+  recordPanel.hidden = false;
+  renderMessage(recordBody, message);
+}
+
+/** The server's own words for a failed response, or a plain fallback. */
+async function failureMessage(response: Response, fallback: string): Promise<string> {
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  return body.error ?? fallback;
+}
+
 /** Thrown when a request comes back unauthenticated; the gate is the answer. */
 class NotAuthenticated extends Error {}
 
@@ -132,10 +154,7 @@ async function route(): Promise<void> {
     if (error instanceof NotAuthenticated) return showGate();
     if (!current()) return;
 
-    gate.hidden = true;
-    logPanel.hidden = true;
-    recordPanel.hidden = false;
-    renderMessage(recordBody, error instanceof Error ? error.message : String(error));
+    showMessage(error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -161,17 +180,40 @@ gateForm.addEventListener('submit', async (event) => {
 });
 
 el('logout').addEventListener('click', async () => {
-  await api('/logout', { method: 'POST' });
+  // The cookie is the server's to clear, so a logout the server never heard
+  // has ended nothing. Showing the gate would say that it had.
+  try {
+    const response = await api('/logout', { method: 'POST' });
+    if (!response.ok) {
+      return showMessage(await failureMessage(response, 'This session could not be ended.'));
+    }
+  } catch {
+    return showMessage('This session could not be ended. Check your connection and try again.');
+  }
+
   showGate();
 });
 
 window.addEventListener('hashchange', () => void route());
 
-// Decide which face to show before the user sees either.
+// Decide which face to show before the user sees either. Nothing has been
+// painted yet at this point, so a failure here is the one that costs the most:
+// it must say something rather than leave the masthead over an empty page.
 async function start(): Promise<void> {
-  const session = (await (await api('/session')).json()) as { authenticated: boolean };
-  if (session.authenticated) await route();
-  else showGate();
+  const unreachable = 'Ratify could not be reached. Check your connection and reload.';
+
+  try {
+    const response = await api('/session');
+    if (!response.ok) return showMessage(await failureMessage(response, unreachable));
+
+    const session = (await response.json()) as { authenticated: boolean };
+    if (session.authenticated) await route();
+    else showGate();
+  } catch {
+    // Whatever the browser calls a failed fetch, the reader needs the plain
+    // version: the server is not answering, and reloading is the way back.
+    showMessage(unreachable);
+  }
 }
 
 void start();
