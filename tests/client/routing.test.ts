@@ -362,6 +362,25 @@ describe('failure paths', () => {
     expect(panel('record').hidden).toBe(true);
   });
 
+  // The quadrant the pair above leaves empty, and the one production reaches
+  // first: a refusal on the reader's *own* record navigation. `fetchIndex`
+  // serves the cached index without asking the server, so once the log has
+  // been read a session that expires is observed only here.
+  it('shows the gate when a live record navigation is refused', async () => {
+    await boot();
+
+    navigate('#/adr/3');
+    await settle();
+    expect(pendingRecord).not.toBeNull();
+
+    pendingRecord!.resolve(jsonResponse({ error: 'Not authenticated.' }, 401));
+    await settle();
+
+    expect(panel('gate').hidden).toBe(false);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(true);
+  });
+
   it('shows a message when the log itself cannot be read', async () => {
     overrides['/api/log'] = () => Promise.resolve(jsonResponse({ error: 'no log here' }, 500));
 
