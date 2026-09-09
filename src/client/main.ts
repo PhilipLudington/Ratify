@@ -29,6 +29,7 @@ const logIndex = el('log-index');
 const logEmpty = el('log-empty');
 const recordPanel = el('record');
 const recordBody = el('record-body');
+const back = el<HTMLAnchorElement>('back');
 
 /** The index, fetched once per session and reused by both views. */
 let index: Index | null = null;
@@ -124,8 +125,7 @@ async function showRecord(
     const record = parseRecord(await response.text());
     render = () => renderRecord(recordBody, record, entries);
   } else {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    const message = body.error ?? 'That record could not be read.';
+    const message = await failureMessage(response, 'That record could not be read.');
     render = () => renderMessage(recordBody, message);
   }
 
@@ -168,8 +168,7 @@ gateForm.addEventListener('submit', async (event) => {
   });
 
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    gateError.textContent = body.error ?? 'Could not verify that passphrase.';
+    gateError.textContent = await failureMessage(response, 'Could not verify that passphrase.');
     gateError.hidden = false;
     passphrase.select();
     return;
@@ -192,6 +191,14 @@ el('logout').addEventListener('click', async () => {
   }
 
   showGate();
+});
+
+// The back link is the only control a message screen leaves on the page — the
+// log panel, and the logout button in it, are hidden behind the message. Its
+// `href` fires no `hashchange` when the hash is already the log, so a message
+// rendered there would offer nothing but a reload. Route on the click itself.
+back.addEventListener('click', () => {
+  if (window.location.hash === back.hash) void route();
 });
 
 window.addEventListener('hashchange', () => void route());
