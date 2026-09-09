@@ -26,11 +26,7 @@ import type {
   SectionCoverage,
 } from '../shared/record';
 import { citeAdr } from '../shared/record';
-
-/** The route that shows one record. Hash routing: Pages needs no rewrite rule. */
-export function recordHref(number: number): string {
-  return `#/adr/${number}`;
-}
+import { recordHref } from './routes';
 
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,

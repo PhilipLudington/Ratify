@@ -11,6 +11,7 @@
 import { parseRecord } from '../shared/format';
 import type { Index } from '../shared/record';
 import { renderIndex, renderMessage, renderRecord } from './log-view';
+import { parseHash } from './routes';
 
 const el = <T extends HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
@@ -32,6 +33,19 @@ const recordBody = el('record-body');
 /** The index, fetched once per session and reused by both views. */
 let index: Index | null = null;
 
+/**
+ * Which navigation is the live one. A response that arrives after the reader
+ * has moved on must not paint over the newer view: the URL and the screen
+ * would disagree, and the way back may be a link to a hash that is already
+ * current — which fires no `hashchange`, so nothing would re-route and the
+ * view would stay wrong until a reload.
+ *
+ * Every path that decides what is on screen advances this, `showGate`
+ * included: logging out is a navigation like any other, and a record fetch
+ * still in flight when the session ends must not land on top of the gate.
+ */
+let generation = 0;
+
 async function api(path: string, init: RequestInit = {}): Promise<Response> {
   return fetch(`/api${path}`, {
     ...init,
@@ -40,6 +54,7 @@ async function api(path: string, init: RequestInit = {}): Promise<Response> {
 }
 
 function showGate(): void {
+  generation += 1;
   index = null;
   gate.hidden = false;
   logPanel.hidden = true;
@@ -70,39 +85,52 @@ function showIndex(entries: Index): void {
   logPanel.hidden = false;
 }
 
-async function showRecord(number: number, entries: Index): Promise<void> {
+async function showRecord(
+  number: number,
+  entries: Index,
+  current: () => boolean,
+): Promise<void> {
   const response = await api(`/record/${number}`);
   if (response.status === 401) throw new NotAuthenticated();
+
+  // Read the whole body before touching the DOM. Every await is another
+  // chance for the reader to navigate away, and a view applied halfway is
+  // worse than one applied late. parseRecord is fail-loud by design: text
+  // that is not a canonical record throws to `route`, never renders in part.
+  let render: () => void;
+  if (response.ok) {
+    const record = parseRecord(await response.text());
+    render = () => renderRecord(recordBody, record, entries);
+  } else {
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    const message = body.error ?? 'That record could not be read.';
+    render = () => renderMessage(recordBody, message);
+  }
+
+  if (!current()) return;
 
   gate.hidden = true;
   logPanel.hidden = true;
   recordPanel.hidden = false;
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    renderMessage(recordBody, body.error ?? 'That record could not be read.');
-    return;
-  }
-
-  // parseRecord is fail-loud by design: text that is not a canonical record is
-  // an error to surface, never something to render half of.
-  renderRecord(recordBody, parseRecord(await response.text()), entries);
-}
-
-/** `#/adr/3` shows one record; everything else is the log. */
-function routedRecord(): number | null {
-  const match = /^#\/adr\/([1-9]\d*)$/.exec(window.location.hash);
-  return match === null ? null : Number(match[1]);
+  render();
 }
 
 async function route(): Promise<void> {
+  const mine = ++generation;
+  const current = (): boolean => mine === generation;
+
   try {
     const entries = await fetchIndex();
-    const number = routedRecord();
+    if (!current()) return;
+
+    const number = parseHash(window.location.hash);
     if (number === null) showIndex(entries);
-    else await showRecord(number, entries);
+    else await showRecord(number, entries, current);
   } catch (error) {
+    // A 401 is answered whatever the generation: the session is gone, and
+    // every later request would reach the same conclusion.
     if (error instanceof NotAuthenticated) return showGate();
+    if (!current()) return;
 
     gate.hidden = true;
     logPanel.hidden = true;

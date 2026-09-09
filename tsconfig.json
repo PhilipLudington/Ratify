@@ -21,5 +21,8 @@
     "src/shared/**/*.ts",
     "functions/**/*.ts",
     "tests/**/*.ts"
-  ]
+  ],
+  // The client's tests need the DOM lib, which this half deliberately lacks;
+  // they are typechecked by tsconfig.client.json instead.
+  "exclude": ["tests/client/**/*.ts"]
 }
