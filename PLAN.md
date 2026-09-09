@@ -90,6 +90,24 @@ DESIGN.md deferred five decisions to this document. All five are now decided:
 
 ---
 
+## Next Up
+
+Found issues, worked between PRs and ahead of phase work.
+
+- [ ] Bug 1 — a failed `/api/session` check renders a blank page, `src/client/main.ts:170`;
+      give `start()` and the logout handler the error path `route()` already has.
+      (qa-review 2026-09-08)
+- [ ] A stale 401 can paint the gate over a valid session, `src/client/main.ts:128-131` —
+      `route()`'s catch answers `NotAuthenticated` before checking the generation, so a
+      record fetch that outlives a logout-and-login round trip re-gates a live session.
+      Move `if (!current()) return;` above the `NotAuthenticated` check, with a test for
+      that sequence. (qa-review 2026-09-08)
+- [ ] `GET /api/version` has no test, `src/worker/doorman.ts:130` — assert its shape and
+      that it answers before the config check, since it is the first thing PLAN.md tells
+      a deploy investigation to curl. (qa-review 2026-09-08)
+
+---
+
 ## Phase 0: Foundation & Deployed Skeleton
 
 **Goal:** A passphrase-gated, session-cookied request reaches a Durable Object
@@ -290,6 +308,15 @@ one with an empty `## Objections`, and one with a version snapshot. A DO test
 asserting a fresh instance self-seeds exactly six records with sequential
 numbers and a consistent index. Manually: open the app on a new session and see
 a populated, readable log with a visible supersession chain.
+
+Added 2026-09-08, after `/qa-review` found the whole client layer unasserted:
+a second Vitest project, `client`, runs `tests/client/**` under happy-dom while
+`workers` keeps the rest in real workerd — one `./run-tests.sh` covers both.
+It pins what only a DOM can show: that record prose reaches the screen as text
+and never as markup, that the scrutiny stamp stays five descriptive rows with
+no score or target state, that an empty section says nothing about being empty,
+that both supersession directions render, and that a record response arriving
+after the reader has navigated away is dropped rather than painted.
 
 ### Phase 1 Readiness Gate
 

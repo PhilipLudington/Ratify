@@ -23,6 +23,19 @@ Do NOT run `npm test`, `vitest`, or `npx vitest` directly. The wrapper writes
 `.test-results.json`, which is what the AirTower badge reads; running the tool
 directly leaves the badge stale.
 
+Two Vitest projects, one command:
+
+| Project | Runs | Environment |
+|---|---|---|
+| `workers` | `tests/**` except `tests/client/` | real workerd, via `wrangler.log.toml` |
+| `client` | `tests/client/**` | happy-dom |
+
+A client test goes in `tests/client/` or it runs in workerd, which has no DOM.
+`tsconfig.json` excludes that directory and `tsconfig.client.json` includes it,
+so the DOM lib is available there and nowhere else. happy-dom is a dev
+dependency only — the shipped client stays vanilla TypeScript with no runtime
+dependency.
+
 ## Building
 
 ```bash
