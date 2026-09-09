@@ -2,9 +2,10 @@
 //
 // The case this file exists for: a record fetch that resolves *after* the
 // reader has already navigated somewhere else. Painting the late response
-// leaves the URL and the screen disagreeing, and the way back from a record is
-// a link to `#/` — which, when the hash is already `#/`, fires no `hashchange`
-// and so re-routes nothing. The view would stay wrong until a reload.
+// leaves the URL and the screen disagreeing, with nothing on screen to say
+// so. The back link out of a record is a link to `#/`, which fires no
+// `hashchange` when the hash is already `#/` — it routes on the click itself
+// for exactly that case, which is its own test below.
 //
 // `main.ts` wires itself to the document and starts on import, so each test
 // builds the page, stubs `fetch`, and imports the module fresh.

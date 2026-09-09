@@ -37,9 +37,9 @@ let index: Index | null = null;
 /**
  * Which navigation is the live one. A response that arrives after the reader
  * has moved on must not paint over the newer view: the URL and the screen
- * would disagree, and the way back may be a link to a hash that is already
- * current — which fires no `hashchange`, so nothing would re-route and the
- * view would stay wrong until a reload.
+ * would then disagree, and nothing on the screen would say which one is
+ * wrong. (The back link recovers such a screen — see its listener below —
+ * but a reader with no reason to distrust the view would not click it.)
  *
  * Every path that decides what is on screen advances this, `showGate`
  * included: logging out is a navigation like any other, and a record fetch
