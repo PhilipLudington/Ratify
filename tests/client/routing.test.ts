@@ -53,7 +53,10 @@ const PAGE = `
     <ol id="log-index"></ol>
     <button type="button" id="logout"></button>
   </section>
-  <section id="record" hidden><article id="record-body"></article></section>
+  <section id="record" hidden>
+    <p><a href="#/" id="back" class="back">← The log</a></p>
+    <article id="record-body"></article>
+  </section>
 `;
 
 interface Deferred {
@@ -294,6 +297,49 @@ describe('failure paths', () => {
 
     expect(panel('gate').hidden).toBe(true);
     expect(panel('record-body').textContent).toContain('Server is not configured.');
+  });
+
+  it('shows the gate to a visitor with no session', async () => {
+    overrides['/api/session'] = () => Promise.resolve(jsonResponse({ authenticated: false }));
+
+    await boot();
+
+    expect(panel('gate').hidden).toBe(false);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(true);
+  });
+
+  it('shows a message when the log itself cannot be read', async () => {
+    overrides['/api/log'] = () => Promise.resolve(jsonResponse({ error: 'no log here' }, 500));
+
+    await boot();
+
+    expect(panel('gate').hidden).toBe(true);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(false);
+    expect(panel('record-body').textContent).toMatch(/could not be read/i);
+  });
+
+  // The message hides the log panel, and the logout button with it. What is
+  // left on screen is the back link — whose `href="#/"` fires no `hashchange`
+  // when the hash is already `#/`, so without a click of its own the reader
+  // is left with a screen that offers nothing and a reload.
+  it('leaves a way back when the failure message lands at the log', async () => {
+    await boot();
+    navigate('#/');
+    await settle();
+
+    overrides['/api/logout'] = unreachable;
+    panel('logout').click();
+    await settle();
+    expect(panel('record').hidden).toBe(false);
+
+    delete overrides['/api/logout'];
+    panel('back').click();
+    await settle();
+
+    expect(panel('log').hidden).toBe(false);
+    expect(panel('record').hidden).toBe(true);
   });
 
   // A message is a navigation like any other: a record fetch still in flight
