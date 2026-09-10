@@ -90,3 +90,45 @@ cannot be sent at all" is the regression test, and fails on the unfixed tree wit
 `#gate-error` still hidden.
 
 ---
+
+## [ ] Bug 3: A dropped connection reaches the reader as raw browser jargon
+
+**Status:** Open
+
+**Description:** `route()`'s catch renders the caught error's own message verbatim —
+`showMessage(error instanceof Error ? error.message : String(error))`
+(`src/client/main.ts:167`) — so a `fetch` that never reaches the server puts the
+browser's internal string on screen as the entire message: "Failed to fetch" in
+Chrome, "Load failed" in Safari, "NetworkError when attempting to fetch resource."
+in Firefox. It is the same event Bug 1 and Bug 2 both gave a plain sentence to, one
+function up: `start()` (`:240`) says "Ratify could not be reached. Check your
+connection and reload." and the logout handler (`:220`) says "This session could not
+be ended. Check your connection and try again." Only `route()` passes the raw text
+through, and `route()` is the path a reader spends the whole session in.
+
+The same catch also surfaces a parse failure the same way. `fetchIndex` awaits
+`response.json()` unguarded (`:98`), so a 200 carrying HTML — a proxy interstitial,
+a captive portal, a Pages error page — reads as `Unexpected token '<', "<!doctype "…`
+on the log screen.
+
+Neither half is tested. Every `/api/log` override in the suite resolves, the record
+fetch's deferred is always resolved and never rejected, and the `unreachable` helper
+is pointed only at `/api/session`, `/api/logout` and `/api/auth`.
+
+**Steps to reproduce:**
+1. Open the app and pass the gate, so the log is on screen and its index is cached.
+2. Stop the local Pages dev server (or go offline).
+3. Click any record in the log.
+
+**Expected:** A plain line saying the record could not be reached and what to do —
+the treatment `start()` and the logout handler already give the identical failure.
+
+**Actual:** The message screen reads "Failed to fetch" (browser-dependent), which
+names no product, no cause the reader can act on, and no way back.
+
+**Found by:** /qa-review on bug-2-gate-form-silent-when-server-unreachable,
+2026-09-10 — QA Generalist Review (PRE-EXISTING), test gap corroborated by QA Test
+Coverage Review; verified in the main loop by reading `src/client/main.ts:144-168`
+and confirming `unreachable` is wired to no route that reaches `route()`'s catch.
+
+---

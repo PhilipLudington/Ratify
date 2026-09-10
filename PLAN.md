@@ -113,6 +113,15 @@ Found issues, worked between PRs and ahead of phase work.
       the handler tells through, refused and never-arrived apart; the last two share
       `#gate-error` and leave the gate up, and only a refusal selects the passphrase.
       Three tests hang off `signIn()`, which had driven only the success path)
+- [ ] Bug 3 — a dropped connection reaches the reader as raw browser jargon,
+      `src/client/main.ts:167` — `route()`'s catch renders `error.message` verbatim, so a
+      rejected `fetch` shows "Failed to fetch" (Safari: "Load failed") as the whole
+      message, where `start()` and the logout handler both give a plain sentence for the
+      identical event; an HTML-carrying 200 takes the same path through the unguarded
+      `response.json()` at `:98`. Classify in the catch — a `TypeError` from `fetch` gets
+      the "could not be reached" sentence, everything else keeps its message — and point
+      `unreachable` at `/api/log` and at a rejected record fetch, neither of which any
+      test exercises today. (qa-review 2026-09-10)
 - [ ] An expired session shows a live-looking log until the reader opens a record,
       `src/client/main.ts:92` — `fetchIndex` serves the cached index with no request, so
       once a stale 401 is dropped no live request is left to report the dead cookie. The
