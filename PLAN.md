@@ -131,6 +131,18 @@ Found issues, worked between PRs and ahead of phase work.
       none; if it does, CI needs test-only values, never the real ones. Overlaps
       Phase 6 hardening but is not gated on it. (noticed while shipping PR #2,
       2026-09-09)
+- [ ] `./run-tests.sh` prints `ECONNREFUSED` against `localhost:3000` on every run —
+      both `::1:3000` and `127.0.0.1:3000`, several per run, from the `client`
+      project. Nothing fails (160/160 green) and nothing tracked names port 3000, so
+      this is noise, not a break — but noise in a green run is where a real failure
+      goes unread, and `run-tests.sh` is the load-bearing gate while there is no CI.
+      **Unverified lead:** happy-dom's default document URL is `http://localhost:3000/`,
+      and `tests/client/routing.test.ts`'s `afterEach` calls `vi.unstubAllGlobals()`
+      before the next `beforeEach` clears the hash — so the retiring module instance's
+      `hashchange` may be routing with the *real* `fetch` restored, resolving `/api/log`
+      against that default origin. If that is it, the fix is teardown order, not a
+      stub. Confirm before fixing; the noise predates this branch and is on `main`.
+      (noticed 2026-09-09 while gating Bug 2)
 
 ---
 
