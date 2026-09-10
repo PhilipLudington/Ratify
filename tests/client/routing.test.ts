@@ -146,6 +146,9 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // Spies on a prototype outlive the document these tests rebuild, so they
+  // have to be handed back explicitly.
+  vi.restoreAllMocks();
 });
 
 async function boot(): Promise<void> {
@@ -438,6 +441,7 @@ describe('failure paths', () => {
     overrides['/api/session'] = () => Promise.resolve(jsonResponse({ authenticated: false }));
     overrides['/api/auth'] = () =>
       Promise.resolve(jsonResponse({ error: 'That passphrase is not correct.' }, 401));
+    const select = vi.spyOn(HTMLInputElement.prototype, 'select');
 
     await boot();
     signIn('wrong');
@@ -447,6 +451,11 @@ describe('failure paths', () => {
     expect(panel('gate-error').textContent).toBe('That passphrase is not correct.');
     expect(panel('gate').hidden).toBe(false);
     expect(panel('log').hidden).toBe(true);
+    // The wrong passphrase is what failed, so it is selected: the next
+    // keystroke replaces it rather than being appended to it. `value` cannot
+    // show this — `select()` does not change it — so the call itself is the
+    // only thing there is to assert.
+    expect(select).toHaveBeenCalledTimes(1);
   });
 
   // The case the handler had no answer for: `fetch` rejects, and without the
@@ -454,6 +463,7 @@ describe('failure paths', () => {
   it('says so in the gate when the passphrase cannot be sent at all', async () => {
     overrides['/api/session'] = () => Promise.resolve(jsonResponse({ authenticated: false }));
     overrides['/api/auth'] = unreachable;
+    const select = vi.spyOn(HTMLInputElement.prototype, 'select');
 
     await boot();
     signIn();
@@ -463,8 +473,10 @@ describe('failure paths', () => {
     expect(panel('gate-error').textContent).toMatch(/could not be reached/i);
     expect(panel('gate').hidden).toBe(false);
     expect(panel('log').hidden).toBe(true);
-    // The value is not what failed, so it is still there to submit again.
+    // The value is not what failed, so it is still there to submit again —
+    // and left unselected, or pressing the button again would mean retyping.
     expect((panel('passphrase') as HTMLInputElement).value).toBe('open sesame');
+    expect(select).not.toHaveBeenCalled();
   });
 
   // A message is a navigation like any other: a record fetch still in flight
