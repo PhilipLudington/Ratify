@@ -111,11 +111,18 @@ The same catch also surfaces a parse failure the same way. `fetchIndex` awaits
 a captive portal, a Pages error page — reads as `Unexpected token '<', "<!doctype "…`
 on the log screen.
 
+**The two halves arrive as different exceptions, and that is the trap in fixing this.**
+A `fetch` that never connects rejects with a `TypeError`; `response.json()` meeting
+HTML rejects with a **`SyntaxError`**. A fix that classifies only `TypeError` and lets
+everything else keep its own message closes the first half and leaves the second
+reading exactly the string quoted above. Both belong in the fix, or the entry does not
+close.
+
 Neither half is tested. Every `/api/log` override in the suite resolves, the record
 fetch's deferred is always resolved and never rejected, and the `unreachable` helper
 is pointed only at `/api/session`, `/api/logout` and `/api/auth`.
 
-**Steps to reproduce:**
+**Steps to reproduce** (a dropped connection):
 1. Open the app and pass the gate, so the log is on screen and its index is cached.
 2. Stop the local Pages dev server (or go offline).
 3. Click any record in the log.
@@ -125,6 +132,19 @@ the treatment `start()` and the logout handler already give the identical failur
 
 **Actual:** The message screen reads "Failed to fetch" (browser-dependent), which
 names no product, no cause the reader can act on, and no way back.
+
+**Steps to reproduce** (a 200 that is not JSON):
+1. Open the app and pass the gate.
+2. Put anything in front of the app that answers `/api/log` with an HTML page and a
+   200 — a captive portal, a proxy interstitial, a Pages error page.
+3. Reload, or navigate back to the log from a record, so the index is fetched afresh.
+
+**Expected:** The same plain line. A reader cannot act on the difference between a
+server that is absent and one that answers with the wrong thing, so the screen should
+not spend its one sentence on it.
+
+**Actual:** The log screen reads `Unexpected token '<', "<!doctype "... is not valid
+JSON` — a description of the parser's disappointment, addressed to nobody present.
 
 **Found by:** /qa-review on bug-2-gate-form-silent-when-server-unreachable,
 2026-09-10 — QA Generalist Review (PRE-EXISTING), test gap corroborated by QA Test

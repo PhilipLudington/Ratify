@@ -118,10 +118,13 @@ Found issues, worked between PRs and ahead of phase work.
       rejected `fetch` shows "Failed to fetch" (Safari: "Load failed") as the whole
       message, where `start()` and the logout handler both give a plain sentence for the
       identical event; an HTML-carrying 200 takes the same path through the unguarded
-      `response.json()` at `:98`. Classify in the catch — a `TypeError` from `fetch` gets
-      the "could not be reached" sentence, everything else keeps its message — and point
-      `unreachable` at `/api/log` and at a rejected record fetch, neither of which any
-      test exercises today. (qa-review 2026-09-10)
+      `response.json()` at `:98`. Classify in the catch, and note the two halves raise
+      **different** exceptions — a dead connection is a `TypeError`, HTML through
+      `response.json()` is a `SyntaxError` — so a rule that names only `TypeError` and
+      lets everything else keep its message fixes half the bug and ships the other half
+      (BUG.md Bug 3 carries an Expected/Actual for each). Point `unreachable` at
+      `/api/log` and at a rejected record fetch, and add a 200-carrying-HTML case;
+      none of the three is exercised by any test today. (qa-review 2026-09-10)
 - [ ] An expired session shows a live-looking log until the reader opens a record,
       `src/client/main.ts:92` — `fetchIndex` serves the cached index with no request, so
       once a stale 401 is dropped no live request is left to report the dead cookie. The
