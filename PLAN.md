@@ -143,7 +143,7 @@ Found issues, worked between PRs and ahead of phase work.
       none; if it does, CI needs test-only values, never the real ones. Overlaps
       Phase 6 hardening but is not gated on it. (noticed while shipping PR #2,
       2026-09-09)
-- [ ] `./run-tests.sh` prints `ECONNREFUSED` against `localhost:3000` on every run —
+- [x] `./run-tests.sh` prints `ECONNREFUSED` against `localhost:3000` on every run —
       both `::1:3000` and `127.0.0.1:3000`, several per run, from the `client`
       project. Nothing fails (160/160 green) and nothing tracked names port 3000, so
       this is noise, not a break — but noise in a green run is where a real failure
@@ -154,7 +154,13 @@ Found issues, worked between PRs and ahead of phase work.
       `hashchange` may be routing with the *real* `fetch` restored, resolving `/api/log`
       against that default origin. If that is it, the fix is teardown order, not a
       stub. Confirm before fixing; the noise predates this branch and is on `main`.
-      (noticed 2026-09-09 while gating Bug 2)
+      (noticed 2026-09-09 while gating Bug 2) (completed 2026-09-10 — the lead held,
+      confirmed by observation before any change: exactly two stray calls per run, both
+      `/api/log`, from the two tests that end at `#/adr/3` having shown the gate, which
+      clears the cached index. The hash is now cleared in `afterEach` ahead of the
+      unstub, so that last route stays inside the stub window; a `beforeAll` sentinel
+      under `vi.stubGlobal` records anything fetched outside a test's own stub and
+      `afterAll` asserts there was none, so the order cannot regress quietly)
 
 ---
 
