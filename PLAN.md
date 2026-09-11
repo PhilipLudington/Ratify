@@ -106,10 +106,25 @@ Found issues, worked between PRs and ahead of phase work.
       that sequence. (qa-review 2026-09-08) (completed 2026-09-09 — the generation is
       now checked before the error is read; a second test pins that a 401 on the *live*
       navigation still ends in the gate)
-- [ ] Bug 2 — the passphrase form gives no answer when the server is unreachable,
+- [x] Bug 2 — the passphrase form gives no answer when the server is unreachable,
       `src/client/main.ts:165`; wrap the submit handler and put a plain line in
       `#gate-error`, with the client tests that handler has never had (both the ok
-      path and the error-text path). (qa-review 2026-09-09)
+      path and the error-text path). (qa-review 2026-09-09) (completed 2026-09-09 —
+      the handler tells through, refused and never-arrived apart; the last two share
+      `#gate-error` and leave the gate up, and only a refusal selects the passphrase.
+      Three tests hang off `signIn()`, which had driven only the success path)
+- [ ] Bug 3 — a dropped connection reaches the reader as raw browser jargon,
+      `src/client/main.ts:167` — `route()`'s catch renders `error.message` verbatim, so a
+      rejected `fetch` shows "Failed to fetch" (Safari: "Load failed") as the whole
+      message, where `start()` and the logout handler both give a plain sentence for the
+      identical event; an HTML-carrying 200 takes the same path through the unguarded
+      `response.json()` at `:98`. Classify in the catch, and note the two halves raise
+      **different** exceptions — a dead connection is a `TypeError`, HTML through
+      `response.json()` is a `SyntaxError` — so a rule that names only `TypeError` and
+      lets everything else keep its message fixes half the bug and ships the other half
+      (BUG.md Bug 3 carries an Expected/Actual for each). Point `unreachable` at
+      `/api/log` and at a rejected record fetch, and add a 200-carrying-HTML case;
+      none of the three is exercised by any test today. (qa-review 2026-09-10)
 - [ ] An expired session shows a live-looking log until the reader opens a record,
       `src/client/main.ts:92` — `fetchIndex` serves the cached index with no request, so
       once a stale 401 is dropped no live request is left to report the dead cookie. The
@@ -119,6 +134,27 @@ Found issues, worked between PRs and ahead of phase work.
 - [ ] `GET /api/version` has no test, `src/worker/doorman.ts:130` — assert its shape and
       that it answers before the config check, since it is the first thing PLAN.md tells
       a deploy investigation to curl. (qa-review 2026-09-08)
+- [ ] No CI — the repo has no `.github/workflows`, so nothing verifies a PR; both
+      PRs so far were gated only by a local `./run-build.sh` + `./run-tests.sh` run
+      on the author's machine, and GitHub reported no checks on either. Add a
+      workflow running both wrappers on push and pull_request. Check first whether
+      the suite needs `.dev.vars` (gitignored, untracked) — the runner prints
+      "Using secrets defined in .dev.vars" locally, and a clean CI checkout has
+      none; if it does, CI needs test-only values, never the real ones. Overlaps
+      Phase 6 hardening but is not gated on it. (noticed while shipping PR #2,
+      2026-09-09)
+- [ ] `./run-tests.sh` prints `ECONNREFUSED` against `localhost:3000` on every run —
+      both `::1:3000` and `127.0.0.1:3000`, several per run, from the `client`
+      project. Nothing fails (160/160 green) and nothing tracked names port 3000, so
+      this is noise, not a break — but noise in a green run is where a real failure
+      goes unread, and `run-tests.sh` is the load-bearing gate while there is no CI.
+      **Unverified lead:** happy-dom's default document URL is `http://localhost:3000/`,
+      and `tests/client/routing.test.ts`'s `afterEach` calls `vi.unstubAllGlobals()`
+      before the next `beforeEach` clears the hash — so the retiring module instance's
+      `hashchange` may be routing with the *real* `fetch` restored, resolving `/api/log`
+      against that default origin. If that is it, the fix is teardown order, not a
+      stub. Confirm before fixing; the noise predates this branch and is on `main`.
+      (noticed 2026-09-09 while gating Bug 2)
 
 ---
 
