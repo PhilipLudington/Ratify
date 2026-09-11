@@ -52,7 +52,31 @@ if (mode === 'tests') {
   const failures = cases.filter((test) => test.status === 'failed').map((test) => test.name);
   const passed = cases.filter((test) => test.status === 'passed').length;
 
-  write({ passed, failed: failures.length, total: cases.length, failures });
+  // A hook that throws — `beforeAll`, `afterAll`, `beforeEach` — fails its
+  // whole file without failing any test inside it, so it never appears in
+  // `assertionResults` and the counts above cannot see it. Vitest records it
+  // on the file entry instead. Counting only assertions is how a run that
+  // exited 1 still wrote a green badge, which is the one lie this file exists
+  // to prevent.
+  const fileFailures = (report.testResults ?? [])
+    .filter(
+      (file) =>
+        file.status === 'failed' &&
+        !(file.assertionResults ?? []).some((test) => test.status === 'failed'),
+    )
+    .map((file) => `${file.name ?? 'unknown file'}: ${file.message || 'failed outside any test'}`);
+
+  // Last resort. The run is red for a reason this report does not itemise —
+  // a collection error, a crashed worker — and a vague failure is still
+  // better than a green badge.
+  const unexplained =
+    failures.length === 0 && fileFailures.length === 0 && (exitCode !== 0 || report.success === false)
+      ? ['The run failed but no individual test did — see the test output.']
+      : [];
+
+  const all = [...failures, ...fileFailures, ...unexplained];
+
+  write({ passed, failed: all.length, total: cases.length + fileFailures.length + unexplained.length, failures: all });
   process.exit(0);
 }
 

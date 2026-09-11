@@ -131,6 +131,35 @@ Found issues, worked between PRs and ahead of phase work.
       residue of the stale-401 fix above: documented in the comment there, not yet acted
       on. Clearing the cached index when a stale `NotAuthenticated` is caught would cost
       one refetch and turn the next navigation into the cue. (qa-review 2026-09-09)
+- [ ] Bug 4 — the test badge reads green when the run dies before writing a report,
+      `scripts/airtower-results.mjs:35-43` — the no-report branch writes `failed: 0`
+      whatever the exit code, and AirTower colours from `failed` alone
+      (`TestStatus.swift:51`), so a run that exited 1 paints a green `0/0`. The sibling
+      case was fixed on the ECONNREFUSED branch, but that fallback sits inside the
+      report-present path and this branch returns first. Write `failed: 1, total: 1`
+      alongside the message it already carries; `build` mode's `Math.max(errors, 1)` is
+      the pattern. Load-bearing while there is no CI, and the repo now has three Vitest
+      projects and three tsconfigs, i.e. more ways to reach it. **Bundle with the build-mode
+      test gap below** — same file, same new test file, one fix commit. (qa-review 2026-09-11)
+- [ ] `scripts/airtower-results.mjs` build mode is entirely unasserted, `:83-103` —
+      including `errors: exitCode === 0 ? errors : Math.max(errors, 1)`, the same
+      never-green-when-red guard that just failed in tests mode, and the
+      `/\b(error|warning)\b/i` heuristic that sorts a line into error or warning and caps
+      the list at 40. `run-build.sh:40` is its only caller and it decides the build badge.
+      The `tests/scripts/` project added 2026-09-11 makes this testable with the existing
+      `translate` helper — swap the mode and feed a log string. (qa-review 2026-09-11)
+- [ ] The translator's unknown-mode path has no test, `scripts/airtower-results.mjs:105-106`
+      — it is the only path where the script exits non-zero, and `tests/scripts/`'s helper
+      asserts `run.status === 0`, so nothing exercises a non-zero exit at all. A typo in a
+      wrapper's mode argument would surface only as a missing results file, which reads as
+      stale. (qa-review 2026-09-11)
+- [ ] `CLAUDE.md`'s "Where code belongs" table still calls `tests/` "Vitest, running in the
+      real workerd runtime", `CLAUDE.md:79` — false for two of the three test directories
+      since `tests/client/` landed 2026-09-08, and it now contradicts the corrected
+      "Running tests" section forty lines above. A reader who consults the directory table
+      instead puts a `scripts/` test in `tests/`, where it meets the workers pool with no
+      `node:fs` — the failure the placement contract exists to prevent. Qualify the row:
+      `tests/` workerd, `tests/client/` happy-dom, `tests/scripts/` node. (qa-review 2026-09-11)
 - [ ] `GET /api/version` has no test, `src/worker/doorman.ts:130` — assert its shape and
       that it answers before the config check, since it is the first thing PLAN.md tells
       a deploy investigation to curl. (qa-review 2026-09-08)
@@ -143,7 +172,7 @@ Found issues, worked between PRs and ahead of phase work.
       none; if it does, CI needs test-only values, never the real ones. Overlaps
       Phase 6 hardening but is not gated on it. (noticed while shipping PR #2,
       2026-09-09)
-- [ ] `./run-tests.sh` prints `ECONNREFUSED` against `localhost:3000` on every run —
+- [x] `./run-tests.sh` prints `ECONNREFUSED` against `localhost:3000` on every run —
       both `::1:3000` and `127.0.0.1:3000`, several per run, from the `client`
       project. Nothing fails (160/160 green) and nothing tracked names port 3000, so
       this is noise, not a break — but noise in a green run is where a real failure
@@ -154,7 +183,13 @@ Found issues, worked between PRs and ahead of phase work.
       `hashchange` may be routing with the *real* `fetch` restored, resolving `/api/log`
       against that default origin. If that is it, the fix is teardown order, not a
       stub. Confirm before fixing; the noise predates this branch and is on `main`.
-      (noticed 2026-09-09 while gating Bug 2)
+      (noticed 2026-09-09 while gating Bug 2) (completed 2026-09-10 — the lead held,
+      confirmed by observation before any change: exactly two stray calls per run, both
+      `/api/log`, from the two tests that end at `#/adr/3` having shown the gate, which
+      clears the cached index. The hash is now cleared in `afterEach` ahead of the
+      unstub, so that last route stays inside the stub window; a `beforeAll` sentinel
+      under `vi.stubGlobal` records anything fetched outside a test's own stub and
+      `afterAll` asserts there was none, so the order cannot regress quietly)
 
 ---
 

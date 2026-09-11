@@ -22,7 +22,9 @@
     "functions/**/*.ts",
     "tests/**/*.ts"
   ],
-  // The client's tests need the DOM lib, which this half deliberately lacks;
-  // they are typechecked by tsconfig.client.json instead.
-  "exclude": ["tests/client/**/*.ts"]
+  // Two test directories are typechecked elsewhere, because each needs a lib
+  // this half deliberately lacks: the client's tests need DOM
+  // (tsconfig.client.json), and the script tests need Node's builtins
+  // (tsconfig.scripts.json). Neither belongs in workerd's world.
+  "exclude": ["tests/client/**/*.ts", "tests/scripts/**/*.ts"]
 }

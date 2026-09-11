@@ -152,3 +152,66 @@ Coverage Review; verified in the main loop by reading `src/client/main.ts:144-16
 and confirming `unreachable` is wired to no route that reaches `route()`'s catch.
 
 ---
+
+## [ ] Bug 4: The test badge reads green when the run dies before writing a report
+
+**Status:** Open
+
+**Description:** `scripts/airtower-results.mjs:35-43` is the branch that fires when
+vitest produced no parseable report — it crashed, or died before the JSON reporter ran.
+It writes `{passed: 0, failed: 0, total: 0, failures: ['Vitest produced no report — the
+run failed before any test executed.']}` and exits 0, regardless of the exit code
+`run-tests.sh:18` hands it.
+
+The sentence in `failures` is never read by the thing that decides the colour. AirTower
+derives the badge from `failed` alone: `hasFailures` is
+`suites.contains { $0.failed > 0 }` (`~/Fun/AirTower/Models/TestStatus.swift:51`), and
+`TestTagView.swift:8-16` returns green unless the results are stale or `hasFailures`.
+The file was just written, so it is not stale, and `failed` is 0 — so the badge paints
+**green, reading `0/0`**, over a run that exited 1.
+
+This is the same lie the ECONNREFUSED branch was built to end, one branch over. That
+branch fixed the sibling case — a file-level hook failure, which produces a report — and
+its fallback (`:72-76`) lives *inside* the report-present path, so it cannot reach this
+one: `:35-43` returns first.
+
+The odds of reaching it are not academic. The translator is the last step of the
+project's load-bearing gate while there is still no CI (PLAN.md `## Next Up`), and any
+config error that stops vitest booting lands here — a malformed `vitest.config.ts`, a
+bad tsconfig, a workerd pool that fails to start, an `npx` failure. The repo now has
+three Vitest projects and three tsconfigs, so there are more ways to reach it than there
+were.
+
+`build` mode already does the right thing for the analogous case:
+`errors: exitCode === 0 ? errors : Math.max(errors, 1)` (`:98`) refuses to report zero
+errors on a failed build. `tests` mode's no-report branch has no equivalent.
+
+**Steps to reproduce:**
+1. Run the translator the way `run-tests.sh` does, against a report that does not exist,
+   with a failing exit code:
+   `node scripts/airtower-results.mjs tests /no/such/report.json /tmp/out.json 1`
+2. Read `/tmp/out.json`.
+3. Equivalently, end to end: break `vitest.config.ts` so vitest exits before the reporter
+   runs, then `./run-tests.sh` and look at the badge.
+
+**Expected:** `failed` is at least 1, so the badge is red. A run that exited non-zero must
+never produce a green badge — the whole reason this file exists is that a missing results
+file reads as stale, "which is a worse lie than failed" (`airtower-results.mjs:7-9`).
+
+**Actual:** `{"passed": 0, "failed": 0, "total": 0, "failures": ["Vitest produced no
+report — the run failed before any test executed."]}` — and a green `0/0` badge whose
+tooltip reads "All 0 tests passing".
+
+**Fix:** in that branch, write `failed: 1, total: 1` alongside the message it already
+carries. An unparseable report is the same case and takes the same path.
+
+**Found by:** /qa-review fix-check on econnrefused-noise-in-green-test-run, 2026-09-11 —
+QA Generalist Review (which filed it CRITICAL, then re-banded it pre-existing on direct
+question after confirming the patch touches no line between `:26` and `:54`), corroborated
+by QA Test Coverage Review; verified in the main loop by running the translator against
+both a missing and an unparseable report at exit code 1, and by reading AirTower's
+`TestStatus.swift:51` and `TestTagView.swift:8-16` for the badge-colour rule. Recorded as
+"Noticed (not fixed)" in the previous round's Fix Log before it was understood to paint
+the badge green.
+
+---
