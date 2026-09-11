@@ -10,7 +10,7 @@
 // `main.ts` wires itself to the document and starts on import, so each test
 // builds the page, stubs `fetch`, and imports the module fresh.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { serializeRecord } from '../../src/shared/format';
 import type { AdrRecord, Index } from '../../src/shared/record';
@@ -114,17 +114,33 @@ function signIn(value = 'open sesame'): void {
   panel('gate-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 }
 
-beforeEach(async () => {
+/**
+ * Requests made outside any test's own stub. There should be none: between
+ * one test's teardown and the next one's setup nothing is meant to be asking
+ * the server anything, and the real `fetch` in that gap resolves `/api/log`
+ * against happy-dom's default document URL — `http://localhost:3000/`, where
+ * nothing is listening. Recorded rather than thrown, because the caller is
+ * `route`, which catches; `afterAll` is what reports them.
+ */
+const strayFetches: string[] = [];
+
+beforeAll(() => {
+  // Installed under `vi.stubGlobal` rather than over it, so this is what
+  // `unstubAllGlobals` restores each test to.
+  globalThis.fetch = ((input: RequestInfo | URL) => {
+    strayFetches.push(String(input));
+    return Promise.reject(new TypeError('Failed to fetch'));
+  }) as typeof fetch;
+});
+
+afterAll(() => {
+  expect(strayFetches).toEqual([]);
+});
+
+beforeEach(() => {
   document.body.innerHTML = PAGE;
   pendingRecord = null;
   overrides = {};
-
-  // Clearing a hash the last test left behind fires a `hashchange` of its
-  // own. Let it land here, against the module instance that is on its way
-  // out, rather than during the next test's boot — where it would route the
-  // fresh instance to the log behind whatever that test is asserting.
-  window.location.hash = '';
-  await settle();
 
   vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
     const url = String(input);
@@ -144,7 +160,20 @@ beforeEach(async () => {
   vi.resetModules();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Clearing a hash the test left behind fires a `hashchange` of its own, and
+  // the module instance on its way out is still listening for it — it routes
+  // one last time. That has to land *here*, before the stubs come down and
+  // while this test's page is still the one on screen: after
+  // `unstubAllGlobals` the retiring instance would route with the real
+  // `fetch`, resolving `/api/log` against happy-dom's default document URL
+  // (`http://localhost:3000/`) and reaching for a server that is not there.
+  // Nothing failed when it did — the rejection lands in `route`'s catch — but
+  // every run printed two ECONNREFUSED dumps, and a green run that prints
+  // errors is where a real one goes unread.
+  window.location.hash = '';
+  await settle();
+
   vi.unstubAllGlobals();
   // Spies on a prototype outlive the document these tests rebuild, so they
   // have to be handed back explicitly.
