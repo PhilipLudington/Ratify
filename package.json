@@ -9,13 +9,14 @@
     "dev:pages": "wrangler pages dev",
     "build": "vite build",
     "types": "wrangler types -c wrangler.log.toml",
-    "check": "npm run types && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "check": "npm run types && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.scripts.json --noEmit",
     "test": "vitest run",
     "deploy:log": "wrangler deploy -c wrangler.log.toml",
     "deploy:pages": "npm run build && wrangler pages deploy"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.21.3",
+    "@types/node": "^26.5.0",
     "happy-dom": "^20.14.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",

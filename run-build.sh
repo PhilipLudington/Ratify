@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# AirTower build wrapper. Type-checks both halves of the codebase, builds the
-# client, and dry-runs the Durable Object Worker bundle, recording the outcome
-# in .build-results.json.
+# AirTower build wrapper. Type-checks each of the codebase's three typed
+# surfaces — worker, client, and the script tests — builds the client, and
+# dry-runs the Durable Object Worker bundle, recording the outcome in
+# .build-results.json.
 #
 # The dry run matters: the DO Worker is never exercised by `vite build`, so
 # without it a broken wrangler.log.toml or a bad import would not surface until
@@ -24,6 +25,9 @@ RESULTS=".build-results.json"
 
   echo "== typecheck: client =="
   npx tsc -p tsconfig.client.json --noEmit || exit 1
+
+  echo "== typecheck: script tests =="
+  npx tsc -p tsconfig.scripts.json --noEmit || exit 1
 
   echo "== build: client -> dist =="
   npx vite build || exit 1

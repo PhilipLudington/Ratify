@@ -1,0 +1,21 @@
+{
+  // `tests/scripts/**` spawns and inspects the Node programs in `scripts/`, so
+  // it needs `node:*` typings — which the workerd half must not have, the same
+  // way it must not have DOM. Third of three, alongside tsconfig.json and
+  // tsconfig.client.json.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["tests/scripts/**/*.ts"]
+}

@@ -528,3 +528,25 @@ describe('failure paths', () => {
     expect(document.querySelector('.record-title')).toBeNull();
   });
 });
+
+// The guard above is only worth keeping if it can still fire, and both of its
+// halves fail silently. If anything ever stubbed `fetch` before `beforeAll`
+// ran, `unstubAllGlobals` would restore past the sentinel to the real `fetch`
+// and every stray would go unrecorded; if the recording line were dropped, the
+// array would stay empty for the wrong reason. `afterAll` sees `[]` either
+// way and the suite stays green, so the mechanism is asserted here rather than
+// inferred from silence.
+describe('the stray-fetch guard', () => {
+  it('is what `unstubAllGlobals` restores to, and records what it catches', async () => {
+    // Exactly what `afterEach` does, at the moment a leak would happen.
+    vi.unstubAllGlobals();
+
+    await globalThis.fetch('/probe').catch(() => undefined);
+
+    expect(strayFetches).toEqual(['/probe']);
+
+    // Hand `afterAll` back the empty slate it asserts: this probe is the one
+    // request in the file that is meant to be outside a test's own stub.
+    strayFetches.length = 0;
+  });
+});
