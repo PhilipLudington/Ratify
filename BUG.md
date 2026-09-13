@@ -91,9 +91,9 @@ cannot be sent at all" is the regression test, and fails on the unfixed tree wit
 
 ---
 
-## [ ] Bug 3: A dropped connection reaches the reader as raw browser jargon
+## [x] Bug 3: A dropped connection reaches the reader as raw browser jargon
 
-**Status:** Open
+**Status:** Fixed
 
 **Description:** `route()`'s catch renders the caught error's own message verbatim —
 `showMessage(error instanceof Error ? error.message : String(error))`
@@ -150,6 +150,22 @@ JSON` — a description of the parser's disappointment, addressed to nobody pres
 2026-09-10 — QA Generalist Review (PRE-EXISTING), test gap corroborated by QA Test
 Coverage Review; verified in the main loop by reading `src/client/main.ts:144-168`
 and confirming `unreachable` is wired to no route that reaches `route()`'s catch.
+
+**Fix:** `route()`'s catch now names both platform exceptions before falling through
+to the message (`src/client/main.ts`): a `TypeError` (the fetch never connected) and a
+`SyntaxError` (`response.json()` met HTML) both render "Ratify could not be reached.
+Check your connection and try again." — the line `start()` and the logout handler
+already give, with "try again" rather than "reload" because the back link and the
+hash are the retry here. Everything else that reaches the catch keeps its message,
+because everything else on that path is thrown with its message written for the
+screen (`fetchIndex`'s own line). Nothing was changed about *which* screen shows or
+about the generation guard.
+
+**Test:** `tests/client/routing.test.ts` — three tests under `failure paths`:
+"gives a plain line when the log cannot be reached at all", "…when a record cannot be
+reached at all", and "gives the same plain line when the log answers with something
+that is not JSON". All three fail on the unfixed tree with the exact strings this
+entry quotes.
 
 ---
 

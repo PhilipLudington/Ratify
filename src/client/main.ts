@@ -164,6 +164,21 @@ async function route(): Promise<void> {
     if (!current()) return;
     if (error instanceof NotAuthenticated) return showGate();
 
+    // Two of the exceptions that land here are the platform's, not ours, and
+    // their messages are addressed to a developer: a fetch that never connects
+    // rejects with a TypeError ("Failed to fetch", "Load failed", a sentence
+    // about NetworkError — the browser's choice), and `response.json()` meeting
+    // HTML — a captive portal, a proxy interstitial, a Pages error page —
+    // rejects with a SyntaxError about an unexpected `<`. The reader cannot act
+    // on the difference between a server that is absent and one that answers
+    // with the wrong thing, so both get the plain line `start()` and the logout
+    // handler already give: the server is not answering, and trying again is
+    // the way back. Everything else that reaches here was thrown with its
+    // message written for the screen.
+    if (error instanceof TypeError || error instanceof SyntaxError) {
+      return showMessage('Ratify could not be reached. Check your connection and try again.');
+    }
+
     showMessage(error instanceof Error ? error.message : String(error));
   }
 }

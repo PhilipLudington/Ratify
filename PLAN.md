@@ -113,7 +113,7 @@ Found issues, worked between PRs and ahead of phase work.
       the handler tells through, refused and never-arrived apart; the last two share
       `#gate-error` and leave the gate up, and only a refusal selects the passphrase.
       Three tests hang off `signIn()`, which had driven only the success path)
-- [ ] Bug 3 — a dropped connection reaches the reader as raw browser jargon,
+- [x] Bug 3 — a dropped connection reaches the reader as raw browser jargon,
       `src/client/main.ts:167` — `route()`'s catch renders `error.message` verbatim, so a
       rejected `fetch` shows "Failed to fetch" (Safari: "Load failed") as the whole
       message, where `start()` and the logout handler both give a plain sentence for the
@@ -125,6 +125,9 @@ Found issues, worked between PRs and ahead of phase work.
       (BUG.md Bug 3 carries an Expected/Actual for each). Point `unreachable` at
       `/api/log` and at a rejected record fetch, and add a 200-carrying-HTML case;
       none of the three is exercised by any test today. (qa-review 2026-09-10)
+      (completed 2026-09-13 — the catch names `TypeError` and `SyntaxError` together
+      and gives both the plain "could not be reached" line; the three tests land in
+      `tests/client/routing.test.ts` and failed first with the quoted strings)
 - [ ] An expired session shows a live-looking log until the reader opens a record,
       `src/client/main.ts:92` — `fetchIndex` serves the cached index with no request, so
       once a stale 401 is dropped no live request is left to report the dead cookie. The
