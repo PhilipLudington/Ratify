@@ -424,6 +424,62 @@ describe('failure paths', () => {
     expect(panel('record-body').textContent).toMatch(/could not be read/i);
   });
 
+  // Bug 3. `route` is the path a reader spends the whole session in, and it
+  // was the one path that put the browser's own words on screen: a fetch that
+  // never connects rejects with a TypeError whose message is "Failed to fetch"
+  // (Chrome), "Load failed" (Safari), or a sentence about NetworkError
+  // (Firefox), and `route` rendered that string as the whole message. The
+  // reader gets the plain line `start()` and the logout handler already give
+  // the identical event.
+  it('gives a plain line when the log cannot be reached at all', async () => {
+    overrides['/api/log'] = unreachable;
+
+    await boot();
+
+    expect(panel('gate').hidden).toBe(true);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(false);
+    expect(panel('record-body').textContent).toMatch(/could not be reached/i);
+    expect(panel('record-body').textContent).not.toContain('Failed to fetch');
+  });
+
+  // The production order: the log is on screen and its index cached, the
+  // connection drops, the reader clicks a record.
+  it('gives a plain line when a record cannot be reached at all', async () => {
+    await boot();
+    overrides['/api/record/3'] = unreachable;
+
+    navigate('#/adr/3');
+    await settle();
+
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(false);
+    expect(panel('record-body').textContent).toMatch(/could not be reached/i);
+    expect(panel('record-body').textContent).not.toContain('Failed to fetch');
+  });
+
+  // The other half, and a different exception: a 200 carrying HTML — a
+  // captive portal, a proxy interstitial, a Pages error page — gets past the
+  // status check and fails in `response.json()`, which rejects with a
+  // SyntaxError about an unexpected `<`. A rule that classifies only the
+  // TypeError above leaves this one reading exactly that.
+  it('gives the same plain line when the log answers with something that is not JSON', async () => {
+    overrides['/api/log'] = () =>
+      Promise.resolve(
+        new Response('<!doctype html><title>Sign in to this network</title>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+      );
+
+    await boot();
+
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(false);
+    expect(panel('record-body').textContent).toMatch(/could not be reached/i);
+    expect(panel('record-body').textContent).not.toMatch(/unexpected token|JSON/i);
+  });
+
   // The message hides the log panel, and the logout button with it. What is
   // left on screen is the back link — whose `href="#/"` fires no `hashchange`
   // when the hash is already `#/`, so without a click of its own the reader
