@@ -88,6 +88,13 @@ async function failureMessage(response: Response, fallback: string): Promise<str
 /** Thrown when a request comes back unauthenticated; the gate is the answer. */
 class NotAuthenticated extends Error {}
 
+/**
+ * Thrown when a 200 is not from Ratify at all — a captive portal, a proxy
+ * interstitial, a Pages error page. Classified with the browser's own
+ * failures in `route`: the reader cannot act on the difference.
+ */
+class NotRatify extends Error {}
+
 async function fetchIndex(): Promise<Index> {
   if (index !== null) return index;
 
@@ -122,6 +129,11 @@ async function showRecord(
   // that is not a canonical record throws to `route`, never renders in part.
   let render: () => void;
   if (response.ok) {
+    // A record does not pass through `response.json()`, so HTML here would
+    // reach parseRecord and fail as a malformed *record*. The type the server
+    // labels it with is checked first; a corrupt stored record still fails loud.
+    const type = response.headers.get('Content-Type') ?? '';
+    if (!type.startsWith('text/markdown')) throw new NotRatify();
     const record = parseRecord(await response.text());
     render = () => renderRecord(recordBody, record, entries);
   } else {
@@ -163,6 +175,23 @@ async function route(): Promise<void> {
     // this session was given, so the wait costs a cue, not a permission.
     if (!current()) return;
     if (error instanceof NotAuthenticated) return showGate();
+
+    // Two of the exceptions that land here are the platform's, not ours, and
+    // their messages are addressed to a developer: a fetch that never connects
+    // rejects with a TypeError ("Failed to fetch", "Load failed", a sentence
+    // about NetworkError — the browser's choice), and `response.json()` meeting
+    // HTML — a captive portal, a proxy interstitial, a Pages error page —
+    // rejects with a SyntaxError about an unexpected `<`. A record fetch meets
+    // the same HTML before any parser and raises NotRatify for it. The reader
+    // cannot act on the difference between a server that is absent and one
+    // that answers with the wrong thing, so all three get the plain line the
+    // gate's submit handler already gives (`start()` has its "reload" variant):
+    // the server is not answering, and trying again is the way back.
+    // Everything else that reaches here was thrown with its message written
+    // for the screen.
+    if (error instanceof TypeError || error instanceof SyntaxError || error instanceof NotRatify) {
+      return showMessage('Ratify could not be reached. Check your connection and try again.');
+    }
 
     showMessage(error instanceof Error ? error.message : String(error));
   }
