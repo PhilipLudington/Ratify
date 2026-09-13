@@ -151,21 +151,29 @@ JSON` — a description of the parser's disappointment, addressed to nobody pres
 Coverage Review; verified in the main loop by reading `src/client/main.ts:144-168`
 and confirming `unreachable` is wired to no route that reaches `route()`'s catch.
 
-**Fix:** `route()`'s catch now names both platform exceptions before falling through
+**Fix:** `route()`'s catch now names the platform exceptions before falling through
 to the message (`src/client/main.ts`): a `TypeError` (the fetch never connected) and a
 `SyntaxError` (`response.json()` met HTML) both render "Ratify could not be reached.
-Check your connection and try again." — the line `start()` and the logout handler
-already give, with "try again" rather than "reload" because the back link and the
-hash are the retry here. Everything else that reaches the catch keeps its message,
-because everything else on that path is thrown with its message written for the
-screen (`fetchIndex`'s own line). Nothing was changed about *which* screen shows or
-about the generation guard.
+Check your connection and try again." — the line the gate's submit handler already
+gives the same event (`start()` gives the "reload" variant; the logout handler's line is
+a different sentence). "Try again" rather than "reload" because the back link and the
+hash are the retry here. A record fetch never passes through `response.json()`, so HTML
+there reached `parseRecord` and surfaced as `RecordFormatError('record must open with a
+"---" frontmatter fence')` — a third exception the first cut let through. `showRecord`
+now checks the `Content-Type` `LogDO.readRecord` labels a record with (`text/markdown`)
+before parsing and throws `NotRatify` otherwise, which the catch classifies with the
+other two; a corrupt stored record still arrives as Markdown and still fails loud.
+Everything else that reaches the catch keeps its message, because everything else on
+that path is thrown with its message written for the screen (`fetchIndex`'s own line,
+`parseRecord`'s). Nothing was changed about *which* screen shows or about the
+generation guard.
 
-**Test:** `tests/client/routing.test.ts` — three tests under `failure paths`:
+**Test:** `tests/client/routing.test.ts` — four tests under `failure paths`:
 "gives a plain line when the log cannot be reached at all", "…when a record cannot be
-reached at all", and "gives the same plain line when the log answers with something
-that is not JSON". All three fail on the unfixed tree with the exact strings this
-entry quotes.
+reached at all", "gives the same plain line when the log answers with something that
+is not JSON", and "…when a record answers with something that is not a record". The
+first three fail on the unfixed tree with the exact strings this entry quotes; the
+fourth failed with the parser's frontmatter line (qa-fix 2026-09-13).
 
 ---
 

@@ -126,8 +126,11 @@ Found issues, worked between PRs and ahead of phase work.
       `/api/log` and at a rejected record fetch, and add a 200-carrying-HTML case;
       none of the three is exercised by any test today. (qa-review 2026-09-10)
       (completed 2026-09-13 — the catch names `TypeError` and `SyntaxError` together
-      and gives both the plain "could not be reached" line; the three tests land in
-      `tests/client/routing.test.ts` and failed first with the quoted strings)
+      and gives both the plain "could not be reached" line; a record fetch bypasses
+      `response.json()` and surfaced HTML as `RecordFormatError`, so `showRecord` also
+      checks the `text/markdown` label before parsing (qa-fix 2026-09-13); the four
+      tests land in `tests/client/routing.test.ts` and failed first with the quoted
+      strings)
 - [ ] An expired session shows a live-looking log until the reader opens a record,
       `src/client/main.ts:92` — `fetchIndex` serves the cached index with no request, so
       once a stale 401 is dropped no live request is left to report the dead cookie. The
