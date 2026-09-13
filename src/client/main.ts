@@ -31,7 +31,11 @@ const recordPanel = el('record');
 const recordBody = el('record-body');
 const back = el<HTMLAnchorElement>('back');
 
-/** The index, fetched once per session and reused by both views. */
+/**
+ * The index, fetched once per session and reused by both views. Dropped, so
+ * that the next navigation fetches it again, when a refusal arrives too late
+ * to act on — see `route`'s catch.
+ */
 let index: Index | null = null;
 
 /**
@@ -167,13 +171,17 @@ async function route(): Promise<void> {
     // flight: answering that stale 401 would paint the gate over a session
     // the server has just agreed to.
     //
-    // What replaces it is narrower than it looks: the next request that
-    // *reaches the server* reports a session that is gone. That can be a
-    // while — `fetchIndex` serves the cached index without asking, so a
-    // reader who goes back to the log makes no request at all and sees a
-    // live-looking log until they open a record. The index on screen is one
-    // this session was given, so the wait costs a cue, not a permission.
-    if (!current()) return;
+    // What a dropped refusal leaves behind is the cached index. It still said
+    // something true about the cookie, and with the index served from memory
+    // no later request would ask the server: a reader who went back to the log
+    // would see one that looks live and learn the session was gone only on
+    // opening a record. So the cache goes, and the next navigation asks. If
+    // the refusal was the old session's and a new one is live, that costs one
+    // refetch; if the session really is gone, the server's answer is the gate.
+    if (!current()) {
+      if (error instanceof NotAuthenticated) index = null;
+      return;
+    }
     if (error instanceof NotAuthenticated) return showGate();
 
     // Two of the exceptions that land here are the platform's, not ours, and

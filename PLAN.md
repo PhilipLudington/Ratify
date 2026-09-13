@@ -131,12 +131,16 @@ Found issues, worked between PRs and ahead of phase work.
       checks the `text/markdown` label before parsing (qa-fix 2026-09-13); the four
       tests land in `tests/client/routing.test.ts` and failed first with the quoted
       strings)
-- [ ] An expired session shows a live-looking log until the reader opens a record,
+- [x] An expired session shows a live-looking log until the reader opens a record,
       `src/client/main.ts:92` — `fetchIndex` serves the cached index with no request, so
       once a stale 401 is dropped no live request is left to report the dead cookie. The
       residue of the stale-401 fix above: documented in the comment there, not yet acted
       on. Clearing the cached index when a stale `NotAuthenticated` is caught would cost
       one refetch and turn the next navigation into the cue. (qa-review 2026-09-09)
+      (completed 2026-09-13 — `route()`'s catch clears the cached index when it drops a
+      stale `NotAuthenticated`, so the next navigation asks the server; one test in
+      `tests/client/routing.test.ts` plays the server's order — second record answered,
+      abandoned first one refused — and failed first with the log painted from the cache)
 - [ ] Bug 4 — the test badge reads green when the run dies before writing a report,
       `scripts/airtower-results.mjs:35-43` — the no-report branch writes `failed: 0`
       whatever the exit code, and AirTower colours from `failed` alone
