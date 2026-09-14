@@ -166,11 +166,14 @@ Found issues, worked between PRs and ahead of phase work.
       non-zero exit, a failed build's own count, the error/warning sort with trimming, the
       whole-word match, the cap at forty, and a missing log file; the helper is now
       `run(mode, input, exitCode)` so the build mode is fed a log string as the line asked)
-- [ ] The translator's unknown-mode path has no test, `scripts/airtower-results.mjs:105-106`
+- [x] The translator's unknown-mode path has no test, `scripts/airtower-results.mjs:105-106`
       — it is the only path where the script exits non-zero, and `tests/scripts/`'s helper
       asserts `run.status === 0`, so nothing exercises a non-zero exit at all. A typo in a
       wrapper's mode argument would surface only as a missing results file, which reads as
-      stale. (qa-review 2026-09-11)
+      stale. (qa-review 2026-09-11) (completed 2026-09-14 — the helper is split into a
+      `spawn` that asserts nothing and the `run` the real modes use; one test hands the
+      translator the mode `test` and reads back exit 1, the mode named on stderr, and no
+      results file)
 - [ ] `CLAUDE.md`'s "Where code belongs" table still calls `tests/` "Vitest, running in the
       real workerd runtime", `CLAUDE.md:79` — false for two of the three test directories
       since `tests/client/` landed 2026-09-08, and it now contradicts the corrected
