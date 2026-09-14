@@ -35,19 +35,28 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** Run the translator the way `run-tests.sh` does, and read back what it wrote. */
-const translate = (report: unknown, exitCode: number): Results => {
-  const input = join(dir, 'report.json');
+/**
+ * Spawn the translator the way the wrappers do — a mode, an input path, an
+ * output path, an exit code — and read back what it wrote. `input` is the raw
+ * bytes of the input file, or `null` for no file at all, which is what the
+ * translator meets when the tool died before writing one.
+ */
+const run = (mode: 'tests' | 'build', input: string | null, exitCode: number): unknown => {
+  const inputPath = join(dir, 'input');
   const output = join(dir, 'results.json');
-  writeFileSync(input, JSON.stringify(report));
+  if (input !== null) writeFileSync(inputPath, input);
 
-  const run = spawnSync(process.execPath, [script, 'tests', input, output, String(exitCode)], {
+  const proc = spawnSync(process.execPath, [script, mode, inputPath, output, String(exitCode)], {
     encoding: 'utf8',
   });
-  expect(run.status, run.stderr).toBe(0);
+  expect(proc.status, proc.stderr).toBe(0);
 
-  return JSON.parse(readFileSync(output, 'utf8')) as Results;
+  return JSON.parse(readFileSync(output, 'utf8'));
 };
+
+/** Run the tests translator on a report object, the way `run-tests.sh` does. */
+const translate = (report: unknown, exitCode: number): Results =>
+  run('tests', JSON.stringify(report), exitCode) as Results;
 
 /** One passing assertion, in the shape vitest's JSON reporter emits. */
 const passing = (title: string) => ({ title, ancestorTitles: ['a suite'], status: 'passed' });
@@ -174,5 +183,33 @@ describe('the tests translator', () => {
     expect(results.failures).toHaveLength(1);
     expect(results.passed).toBe(1);
     expect(results.total).toBe(2);
+  });
+
+  // Bug 4. The branches above all start from a report. When vitest dies
+  // before its reporter runs — a config that will not load, a pool that will
+  // not start — there is no report, and the translator's no-report branch
+  // wrote `failed: 0` whatever the exit code. AirTower colours from `failed`
+  // alone, so that was a green `0/0` badge over a run that exited 1: the exact
+  // lie this file exists to prevent, one branch over from where it was fixed.
+
+  it('reports a failure when the run left no report at all', () => {
+    const results = run('tests', null, 1) as Results;
+
+    expect(results.failed).toBeGreaterThanOrEqual(1);
+    expect(results.total).toBeGreaterThanOrEqual(1);
+    expect(results.passed).toBe(0);
+    expect(results.failures).toHaveLength(1);
+    expect(results.failures[0]).toContain('no report');
+  });
+
+  it('reports a failure when the report is not JSON', () => {
+    // The same branch by a different door: a file that exists but will not
+    // parse — a half-written report, or something else altogether.
+    const results = run('tests', '<!doctype html><title>not a report</title>', 1) as Results;
+
+    expect(results.failed).toBeGreaterThanOrEqual(1);
+    expect(results.total).toBeGreaterThanOrEqual(1);
+    expect(results.passed).toBe(0);
+    expect(results.failures).toHaveLength(1);
   });
 });
