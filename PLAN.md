@@ -131,12 +131,16 @@ Found issues, worked between PRs and ahead of phase work.
       checks the `text/markdown` label before parsing (qa-fix 2026-09-13); the four
       tests land in `tests/client/routing.test.ts` and failed first with the quoted
       strings)
-- [ ] An expired session shows a live-looking log until the reader opens a record,
+- [x] An expired session shows a live-looking log until the reader opens a record,
       `src/client/main.ts:92` — `fetchIndex` serves the cached index with no request, so
       once a stale 401 is dropped no live request is left to report the dead cookie. The
       residue of the stale-401 fix above: documented in the comment there, not yet acted
       on. Clearing the cached index when a stale `NotAuthenticated` is caught would cost
       one refetch and turn the next navigation into the cue. (qa-review 2026-09-09)
+      (completed 2026-09-13 — `route()`'s catch clears the cached index when it drops a
+      stale `NotAuthenticated`, so the next navigation asks the server; one test in
+      `tests/client/routing.test.ts` plays the server's order — second record answered,
+      abandoned first one refused — and failed first with the log painted from the cache)
 - [ ] Bug 4 — the test badge reads green when the run dies before writing a report,
       `scripts/airtower-results.mjs:35-43` — the no-report branch writes `failed: 0`
       whatever the exit code, and AirTower colours from `failed` alone
@@ -169,6 +173,14 @@ Found issues, worked between PRs and ahead of phase work.
 - [ ] `GET /api/version` has no test, `src/worker/doorman.ts:130` — assert its shape and
       that it answers before the config check, since it is the first thing PLAN.md tells
       a deploy investigation to curl. (qa-review 2026-09-08)
+- [ ] The stale-refusal cache clear has no test for either edge, `src/client/main.ts:182`
+      — the benign half (old session's 401 dropped, new session live, the next navigation
+      refetches and paints the log with no gate) is unasserted, and the `instanceof
+      NotAuthenticated` guard has no negative case, so deleting it leaves the suite green.
+      Two tests in `tests/client/routing.test.ts`: extend the fresh-session test at `:268`
+      with a further navigation asserting the log and no gate; and one that rejects the
+      abandoned record fetch with a `TypeError`, counts `/api/log` calls through an
+      override, and asserts zero. (qa-review 2026-09-13)
 - [ ] No CI — the repo has no `.github/workflows`, so nothing verifies a PR; both
       PRs so far were gated only by a local `./run-build.sh` + `./run-tests.sh` run
       on the author's machine, and GitHub reported no checks on either. Add a

@@ -420,6 +420,45 @@ describe('failure paths', () => {
     expect(panel('record').hidden).toBe(true);
   });
 
+  // The residue of dropping a stale refusal. A 401 that arrives too late to
+  // act on still said something true about the cookie, and with the index
+  // cached nothing else will ask the server: the reader goes back to a log
+  // that is served from memory and looks live, and learns the session is gone
+  // only when they open a record. The order here is the server's — the
+  // reader's second request answered first, then the abandoned one, refused,
+  // the session having expired between the two. Going back to the log must
+  // then ask the server, and the server's answer is the gate.
+  it('asks the server for the log again after a refusal it dropped as stale', async () => {
+    await boot();
+
+    navigate('#/adr/3');
+    await settle();
+    const abandoned = pendingRecord!;
+
+    navigate('#/adr/1');
+    await settle();
+    const live = pendingRecord!;
+    expect(live).not.toBe(abandoned);
+
+    live.resolve(recordResponse({ ...ADR_3, number: 1, supersedes: [] }));
+    await settle();
+    abandoned.resolve(jsonResponse({ error: 'Not authenticated.' }, 401));
+    await settle();
+
+    // Stale, so dropped: the record the reader asked for stays on screen.
+    expect(panel('gate').hidden).toBe(true);
+    expect(document.querySelector('.record-title')?.textContent).toContain('ADR-1');
+
+    overrides['/api/log'] = () =>
+      Promise.resolve(jsonResponse({ error: 'Not authenticated.' }, 401));
+    navigate('#/');
+    await settle();
+
+    expect(panel('gate').hidden).toBe(false);
+    expect(panel('log').hidden).toBe(true);
+    expect(panel('record').hidden).toBe(true);
+  });
+
   it('shows a message when the log itself cannot be read', async () => {
     overrides['/api/log'] = () => Promise.resolve(jsonResponse({ error: 'no log here' }, 500));
 
