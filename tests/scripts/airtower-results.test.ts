@@ -25,6 +25,13 @@ interface Results {
   failures: string[];
 }
 
+interface BuildResults {
+  success: boolean;
+  errors: number;
+  warnings: number;
+  messages: string[];
+}
+
 let dir: string;
 
 beforeEach(() => {
@@ -211,5 +218,99 @@ describe('the tests translator', () => {
     expect(results.total).toBeGreaterThanOrEqual(1);
     expect(results.passed).toBe(0);
     expect(results.failures).toHaveLength(1);
+  });
+});
+
+// `build` mode reads the log `run-build.sh` tees and decides the build badge.
+// It was entirely unasserted until 2026-09-14 — including the guard that the
+// tests translator had just been found lacking (Bug 4): never report zero
+// errors for a build that exited non-zero.
+describe('the build translator', () => {
+  /** Run the build translator on a log, the way `run-build.sh` does. */
+  const build = (log: string, exitCode: number): BuildResults =>
+    run('build', log, exitCode) as BuildResults;
+
+  it('reports a clean build with nothing to list', () => {
+    const results = build('== typecheck: client ==\nvite v6 building for production...\n✓ built in 300ms\n', 0);
+
+    expect(results).toEqual({ success: true, errors: 0, warnings: 0, messages: [] });
+  });
+
+  it('never reports zero errors for a build that exited non-zero', () => {
+    // The guard Bug 4 was missing on the tests side. A tool can die without
+    // printing a line the heuristic recognises — `npx` refusing to start, a
+    // wrangler crash with no "error" in it — and the badge must still be red.
+    const results = build('== generate: Cloudflare Env types ==\n', 1);
+
+    expect(results.success).toBe(false);
+    expect(results.errors).toBe(1);
+    expect(results.warnings).toBe(0);
+    expect(results.messages).toEqual([]);
+  });
+
+  it('keeps the count the log itself gives when a failed build names its errors', () => {
+    const results = build(
+      [
+        '== typecheck: worker ==',
+        "src/do/log.ts(12,3): error TS2322: Type 'string' is not assignable to type 'number'.",
+        "src/do/log.ts(40,9): error TS2304: Cannot find name 'foo'.",
+        '',
+      ].join('\n'),
+      1,
+    );
+
+    expect(results.success).toBe(false);
+    expect(results.errors).toBe(2);
+    expect(results.messages).toHaveLength(2);
+    expect(results.messages[0]).toContain('TS2322');
+    expect(results.messages[1]).toContain('TS2304');
+  });
+
+  it('sorts each line into error or warning and keeps the text, trimmed', () => {
+    const results = build(
+      [
+        '== build: client -> dist ==',
+        '  warning: "vite.config.ts" has an unused import  ',
+        'plain progress line with neither word',
+        'src/client/main.ts(3,1): error TS1005: expected ;',
+        '',
+      ].join('\n'),
+      0,
+    );
+
+    expect(results.success).toBe(true);
+    expect(results.warnings).toBe(1);
+    expect(results.errors).toBe(1);
+    expect(results.messages).toEqual([
+      'warning: "vite.config.ts" has an unused import',
+      'src/client/main.ts(3,1): error TS1005: expected ;',
+    ]);
+  });
+
+  it('matches the words error and warning only as whole words', () => {
+    // The heuristic is a word-boundary match, so a summary line such as
+    // "Found 0 errors" must not be listed as an error, and "warnings" must not
+    // be listed as a warning.
+    const results = build('Found 0 errors. Watching for file changes.\n3 warnings emitted\n', 0);
+
+    expect(results).toEqual({ success: true, errors: 0, warnings: 0, messages: [] });
+  });
+
+  it('caps the list at forty lines', () => {
+    const log = Array.from({ length: 50 }, (_, i) => `src/x.ts(${i + 1},1): error TS0000: line ${i + 1}`).join('\n');
+    const results = build(log, 1);
+
+    expect(results.messages).toHaveLength(40);
+    expect(results.errors).toBe(40);
+    expect(results.messages[0]).toContain('line 1');
+    expect(results.messages[39]).toContain('line 40');
+  });
+
+  it('reports a failed build whose log file is missing', () => {
+    // `run-build.sh` always writes the log it tees, but the translator's
+    // contract is to write a result file whatever it was handed.
+    const results = run('build', null, 1) as BuildResults;
+
+    expect(results).toEqual({ success: false, errors: 1, warnings: 0, messages: [] });
   });
 });
