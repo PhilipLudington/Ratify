@@ -32,11 +32,16 @@ if (mode === 'tests') {
     report = null;
   }
 
+  // No report, or one that will not parse: vitest died before its reporter
+  // ran. That is a failed run whatever the exit code says, and it has to be
+  // counted as one — AirTower colours the badge from `failed` alone, so the
+  // sentence below on its own painted a green `0/0` over a red run (Bug 4).
+  // The same guard `build` mode applies to its exit code, one branch over.
   if (!report) {
     write({
       passed: 0,
-      failed: 0,
-      total: 0,
+      failed: 1,
+      total: 1,
       failures: ['Vitest produced no report — the run failed before any test executed.'],
     });
     process.exit(0);
