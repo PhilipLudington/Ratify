@@ -141,7 +141,7 @@ Found issues, worked between PRs and ahead of phase work.
       stale `NotAuthenticated`, so the next navigation asks the server; one test in
       `tests/client/routing.test.ts` plays the server's order — second record answered,
       abandoned first one refused — and failed first with the log painted from the cache)
-- [ ] Bug 4 — the test badge reads green when the run dies before writing a report,
+- [x] Bug 4 — the test badge reads green when the run dies before writing a report,
       `scripts/airtower-results.mjs:35-43` — the no-report branch writes `failed: 0`
       whatever the exit code, and AirTower colours from `failed` alone
       (`TestStatus.swift:51`), so a run that exited 1 paints a green `0/0`. The sibling
@@ -151,13 +151,21 @@ Found issues, worked between PRs and ahead of phase work.
       the pattern. Load-bearing while there is no CI, and the repo now has three Vitest
       projects and three tsconfigs, i.e. more ways to reach it. **Bundle with the build-mode
       test gap below** — same file, same new test file, one fix commit. (qa-review 2026-09-11)
-- [ ] `scripts/airtower-results.mjs` build mode is entirely unasserted, `:83-103` —
+      (completed 2026-09-14 — the branch writes `failed: 1, total: 1`; two tests in
+      `tests/scripts/airtower-results.test.ts` reach it with no file and with a non-JSON
+      file at exit 1, and failed first with `failed` at 0)
+- [x] `scripts/airtower-results.mjs` build mode is entirely unasserted, `:83-103` —
       including `errors: exitCode === 0 ? errors : Math.max(errors, 1)`, the same
       never-green-when-red guard that just failed in tests mode, and the
       `/\b(error|warning)\b/i` heuristic that sorts a line into error or warning and caps
       the list at 40. `run-build.sh:40` is its only caller and it decides the build badge.
       The `tests/scripts/` project added 2026-09-11 makes this testable with the existing
       `translate` helper — swap the mode and feed a log string. (qa-review 2026-09-11)
+      (completed 2026-09-14 — seven tests under "the build translator" in
+      `tests/scripts/airtower-results.test.ts`: a clean build, the never-zero guard on a
+      non-zero exit, a failed build's own count, the error/warning sort with trimming, the
+      whole-word match, the cap at forty, and a missing log file; the helper is now
+      `run(mode, input, exitCode)` so the build mode is fed a log string as the line asked)
 - [ ] The translator's unknown-mode path has no test, `scripts/airtower-results.mjs:105-106`
       — it is the only path where the script exits non-zero, and `tests/scripts/`'s helper
       asserts `run.status === 0`, so nothing exercises a non-zero exit at all. A typo in a

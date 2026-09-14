@@ -25,6 +25,13 @@ interface Results {
   failures: string[];
 }
 
+interface BuildResults {
+  success: boolean;
+  errors: number;
+  warnings: number;
+  messages: string[];
+}
+
 let dir: string;
 
 beforeEach(() => {
@@ -35,19 +42,28 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** Run the translator the way `run-tests.sh` does, and read back what it wrote. */
-const translate = (report: unknown, exitCode: number): Results => {
-  const input = join(dir, 'report.json');
+/**
+ * Spawn the translator the way the wrappers do — a mode, an input path, an
+ * output path, an exit code — and read back what it wrote. `input` is the raw
+ * bytes of the input file, or `null` for no file at all, which is what the
+ * translator meets when the tool died before writing one.
+ */
+const run = (mode: 'tests' | 'build', input: string | null, exitCode: number): unknown => {
+  const inputPath = join(dir, 'input');
   const output = join(dir, 'results.json');
-  writeFileSync(input, JSON.stringify(report));
+  if (input !== null) writeFileSync(inputPath, input);
 
-  const run = spawnSync(process.execPath, [script, 'tests', input, output, String(exitCode)], {
+  const proc = spawnSync(process.execPath, [script, mode, inputPath, output, String(exitCode)], {
     encoding: 'utf8',
   });
-  expect(run.status, run.stderr).toBe(0);
+  expect(proc.status, proc.stderr).toBe(0);
 
-  return JSON.parse(readFileSync(output, 'utf8')) as Results;
+  return JSON.parse(readFileSync(output, 'utf8'));
 };
+
+/** Run the tests translator on a report object, the way `run-tests.sh` does. */
+const translate = (report: unknown, exitCode: number): Results =>
+  run('tests', JSON.stringify(report), exitCode) as Results;
 
 /** One passing assertion, in the shape vitest's JSON reporter emits. */
 const passing = (title: string) => ({ title, ancestorTitles: ['a suite'], status: 'passed' });
@@ -174,5 +190,127 @@ describe('the tests translator', () => {
     expect(results.failures).toHaveLength(1);
     expect(results.passed).toBe(1);
     expect(results.total).toBe(2);
+  });
+
+  // Bug 4. The branches above all start from a report. When vitest dies
+  // before its reporter runs — a config that will not load, a pool that will
+  // not start — there is no report, and the translator's no-report branch
+  // wrote `failed: 0` whatever the exit code. AirTower colours from `failed`
+  // alone, so that was a green `0/0` badge over a run that exited 1: the exact
+  // lie this file exists to prevent, one branch over from where it was fixed.
+
+  it('reports a failure when the run left no report at all', () => {
+    const results = run('tests', null, 1) as Results;
+
+    expect(results.failed).toBeGreaterThanOrEqual(1);
+    expect(results.total).toBeGreaterThanOrEqual(1);
+    expect(results.passed).toBe(0);
+    expect(results.failures).toHaveLength(1);
+    expect(results.failures[0]).toContain('no report');
+  });
+
+  it('reports a failure when the report is not JSON', () => {
+    // The same branch by a different door: a file that exists but will not
+    // parse — a half-written report, or something else altogether.
+    const results = run('tests', '<!doctype html><title>not a report</title>', 1) as Results;
+
+    expect(results.failed).toBeGreaterThanOrEqual(1);
+    expect(results.total).toBeGreaterThanOrEqual(1);
+    expect(results.passed).toBe(0);
+    expect(results.failures).toHaveLength(1);
+  });
+});
+
+// `build` mode reads the log `run-build.sh` tees and decides the build badge.
+// It was entirely unasserted until 2026-09-14 — including the guard that the
+// tests translator had just been found lacking (Bug 4): never report zero
+// errors for a build that exited non-zero.
+describe('the build translator', () => {
+  /** Run the build translator on a log, the way `run-build.sh` does. */
+  const build = (log: string, exitCode: number): BuildResults =>
+    run('build', log, exitCode) as BuildResults;
+
+  it('reports a clean build with nothing to list', () => {
+    const results = build('== typecheck: client ==\nvite v6 building for production...\n✓ built in 300ms\n', 0);
+
+    expect(results).toEqual({ success: true, errors: 0, warnings: 0, messages: [] });
+  });
+
+  it('never reports zero errors for a build that exited non-zero', () => {
+    // The guard Bug 4 was missing on the tests side. A tool can die without
+    // printing a line the heuristic recognises — `npx` refusing to start, a
+    // wrangler crash with no "error" in it — and the badge must still be red.
+    const results = build('== generate: Cloudflare Env types ==\n', 1);
+
+    expect(results.success).toBe(false);
+    expect(results.errors).toBe(1);
+    expect(results.warnings).toBe(0);
+    expect(results.messages).toEqual([]);
+  });
+
+  it('keeps the count the log itself gives when a failed build names its errors', () => {
+    const results = build(
+      [
+        '== typecheck: worker ==',
+        "src/do/log.ts(12,3): error TS2322: Type 'string' is not assignable to type 'number'.",
+        "src/do/log.ts(40,9): error TS2304: Cannot find name 'foo'.",
+        '',
+      ].join('\n'),
+      1,
+    );
+
+    expect(results.success).toBe(false);
+    expect(results.errors).toBe(2);
+    expect(results.messages).toHaveLength(2);
+    expect(results.messages[0]).toContain('TS2322');
+    expect(results.messages[1]).toContain('TS2304');
+  });
+
+  it('sorts each line into error or warning and keeps the text, trimmed', () => {
+    const results = build(
+      [
+        '== build: client -> dist ==',
+        '  warning: "vite.config.ts" has an unused import  ',
+        'plain progress line with neither word',
+        'src/client/main.ts(3,1): error TS1005: expected ;',
+        '',
+      ].join('\n'),
+      0,
+    );
+
+    expect(results.success).toBe(true);
+    expect(results.warnings).toBe(1);
+    expect(results.errors).toBe(1);
+    expect(results.messages).toEqual([
+      'warning: "vite.config.ts" has an unused import',
+      'src/client/main.ts(3,1): error TS1005: expected ;',
+    ]);
+  });
+
+  it('matches the words error and warning only as whole words', () => {
+    // The heuristic is a word-boundary match, so a summary line such as
+    // "Found 0 errors" must not be listed as an error, and "warnings" must not
+    // be listed as a warning.
+    const results = build('Found 0 errors. Watching for file changes.\n3 warnings emitted\n', 0);
+
+    expect(results).toEqual({ success: true, errors: 0, warnings: 0, messages: [] });
+  });
+
+  it('caps the list at forty lines', () => {
+    const log = Array.from({ length: 50 }, (_, i) => `src/x.ts(${i + 1},1): error TS0000: line ${i + 1}`).join('\n');
+    const results = build(log, 1);
+
+    expect(results.messages).toHaveLength(40);
+    expect(results.errors).toBe(40);
+    expect(results.messages[0]).toContain('line 1');
+    expect(results.messages[39]).toContain('line 40');
+  });
+
+  it('reports a failed build whose log file is missing', () => {
+    // `run-build.sh` always writes the log it tees, but the translator's
+    // contract is to write a result file whatever it was handed.
+    const results = run('build', null, 1) as BuildResults;
+
+    expect(results).toEqual({ success: false, errors: 1, warnings: 0, messages: [] });
   });
 });

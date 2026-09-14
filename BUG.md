@@ -177,9 +177,9 @@ fourth failed with the parser's frontmatter line (qa-fix 2026-09-13).
 
 ---
 
-## [ ] Bug 4: The test badge reads green when the run dies before writing a report
+## [x] Bug 4: The test badge reads green when the run dies before writing a report
 
-**Status:** Open
+**Status:** Fixed
 
 **Description:** `scripts/airtower-results.mjs:35-43` is the branch that fires when
 vitest produced no parseable report — it crashed, or died before the JSON reporter ran.
@@ -226,9 +226,6 @@ file reads as stale, "which is a worse lie than failed" (`airtower-results.mjs:7
 report — the run failed before any test executed."]}` — and a green `0/0` badge whose
 tooltip reads "All 0 tests passing".
 
-**Fix:** in that branch, write `failed: 1, total: 1` alongside the message it already
-carries. An unparseable report is the same case and takes the same path.
-
 **Found by:** /qa-review fix-check on econnrefused-noise-in-green-test-run, 2026-09-11 —
 QA Generalist Review (which filed it CRITICAL, then re-banded it pre-existing on direct
 question after confirming the patch touches no line between `:26` and `:54`), corroborated
@@ -237,5 +234,17 @@ both a missing and an unparseable report at exit code 1, and by reading AirTower
 `TestStatus.swift:51` and `TestTagView.swift:8-16` for the badge-colour rule. Recorded as
 "Noticed (not fixed)" in the previous round's Fix Log before it was understood to paint
 the badge green.
+
+**Fix:** The no-report branch now writes `failed: 1, total: 1` alongside the sentence it
+already carried (`scripts/airtower-results.mjs`), so a run that died before its reporter
+ran paints a red `0/1` whose one failure is that sentence. An unparseable report is the
+same case and takes the same path, as the entry predicted. The exit code is not consulted
+there: a missing report is a failed run whether or not vitest managed to say so, and the
+`build`-mode guard this mirrors (`Math.max(errors, 1)`) is the same refusal to report zero
+for a run that did not finish. Nothing else in `tests` mode changed.
+
+**Test:** `tests/scripts/airtower-results.test.ts` — "reports a failure when the run left
+no report at all" and "reports a failure when the report is not JSON", both failing on the
+unfixed tree with `expected 0 to be greater than or equal to 1`.
 
 ---
