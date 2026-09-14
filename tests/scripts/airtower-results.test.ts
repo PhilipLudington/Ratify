@@ -10,7 +10,7 @@
 // `tests/` — the workers pool has no `node:fs` and no subprocesses.
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,11 +44,14 @@ afterEach(() => {
 
 /**
  * Spawn the translator the way the wrappers do — a mode, an input path, an
- * output path, an exit code — and read back what it wrote. `input` is the raw
- * bytes of the input file, or `null` for no file at all, which is what the
- * translator meets when the tool died before writing one.
+ * output path, an exit code — and hand back the process as it ended, plus the
+ * path it was told to write. `input` is the raw bytes of the input file, or
+ * `null` for no file at all, which is what the translator meets when the tool
+ * died before writing one. Nothing is asserted here: the unknown-mode path is
+ * the one place the translator exits non-zero on purpose, and it needs the
+ * same door as the two real modes.
  */
-const run = (mode: 'tests' | 'build', input: string | null, exitCode: number): unknown => {
+const spawn = (mode: string, input: string | null, exitCode: number) => {
   const inputPath = join(dir, 'input');
   const output = join(dir, 'results.json');
   if (input !== null) writeFileSync(inputPath, input);
@@ -56,6 +59,13 @@ const run = (mode: 'tests' | 'build', input: string | null, exitCode: number): u
   const proc = spawnSync(process.execPath, [script, mode, inputPath, output, String(exitCode)], {
     encoding: 'utf8',
   });
+
+  return { proc, output };
+};
+
+/** Run a real mode to completion and read back what it wrote. */
+const run = (mode: 'tests' | 'build', input: string | null, exitCode: number): unknown => {
+  const { proc, output } = spawn(mode, input, exitCode);
   expect(proc.status, proc.stderr).toBe(0);
 
   return JSON.parse(readFileSync(output, 'utf8'));
@@ -219,6 +229,18 @@ describe('the tests translator', () => {
     expect(results.passed).toBe(0);
     expect(results.failures).toHaveLength(1);
   });
+
+  it('reports a failure for a missing report even when the exit code is zero', () => {
+    // Debt 1. Both cases above hand the translator exit code 1, so they would
+    // stay green if the branch were made conditional on it — the shape `build`
+    // mode uses one screen down — and that would bring back the green badge
+    // over a dead run for the case where vitest exits 0 and writes nothing. A
+    // missing report is a failed run whatever the exit code says.
+    const results = run('tests', null, 0) as Results;
+
+    expect(results.failed).toBeGreaterThanOrEqual(1);
+    expect(results.passed).toBe(0);
+  });
 });
 
 // `build` mode reads the log `run-build.sh` tees and decides the build badge.
@@ -312,5 +334,22 @@ describe('the build translator', () => {
     const results = run('build', null, 1) as BuildResults;
 
     expect(results).toEqual({ success: false, errors: 1, warnings: 0, messages: [] });
+  });
+});
+
+// The only path where the translator exits non-zero. Each wrapper spells the
+// mode by hand — `tests` in `run-tests.sh`, `build` in `run-build.sh` — and a
+// misspelling has to fail the wrapper out loud, because the alternative is a
+// results file that never gets written, which the badge reads as stale and
+// nobody reads as broken.
+describe('an unknown mode', () => {
+  it('exits non-zero, names the mode, and writes nothing', () => {
+    // `test` is the typo a hand would make for `tests`.
+    const { proc, output } = spawn('test', '{}', 0);
+
+    expect(proc.status).toBe(1);
+    expect(proc.stderr).toContain('unknown mode');
+    expect(proc.stderr).toContain('"test"');
+    expect(existsSync(output)).toBe(false);
   });
 });

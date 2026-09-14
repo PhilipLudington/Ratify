@@ -248,3 +248,47 @@ no report at all" and "reports a failure when the report is not JSON", both fail
 unfixed tree with `expected 0 to be greater than or equal to 1`.
 
 ---
+
+## [ ] Bug 5: Both wrappers exit with the tool's status and discard the translator's
+
+**Status:** Open
+**Deferred:** after submission — dev tooling; the badge is not on the demo's surface, and
+both wrappers spell their mode correctly today, so the only reachable trigger is an
+unwritable results file
+
+**Description:** `run-tests.sh:18-21` runs `node scripts/airtower-results.mjs …` and then
+`exit $STATUS`, where `STATUS` was captured from vitest on line 16; `run-build.sh:41-44`
+does the same with `PIPESTATUS[0]` from the build pipeline. Neither script has `set -e`,
+and neither reads the translator's own exit code. So when the translator fails — an
+unknown mode (`airtower-results.mjs:110-111`, exit 1) or a `writeFileSync` that throws
+because the output path cannot be written (uncaught, exit 1) — no results file is written,
+and the wrapper still exits with the tool's status, which is 0 on a green run. AirTower
+then reads the untouched results file as stale, which is the "worse lie than failed" the
+translator's own header says it exists to prevent.
+
+The translator's unknown-mode path is tested as of 2026-09-14 (`tests/scripts/
+airtower-results.test.ts`, "an unknown mode"), and its comment says a misspelling "has to
+fail the wrapper out loud". The translator does its half; the wrapper does not do its.
+
+**Steps to reproduce:**
+1. Make the translator fail without touching vitest: point it at an output path in a
+   directory that does not exist, the way an unwritable results file would —
+   `node scripts/airtower-results.mjs tests /no/such/report.json /no/such/dir/out.json 0`
+   exits 1 with `ENOENT` and writes nothing.
+2. Run the same in the wrapper's shape: `(STATUS=0; node scripts/airtower-results.mjs
+   test in out 0; exit $STATUS); echo $?` prints `airtower-results: unknown mode "test"`
+   and then `0`.
+3. Equivalently, in a scratch copy of `run-tests.sh`, change `tests` on line 18 to `test`
+   and run it: the suite passes, the script exits 0, `.test-results.json` is untouched.
+
+**Expected:** A wrapper whose translator failed exits non-zero, so the failure is seen by
+whoever ran it; a results file that was not written is never silently left stale.
+
+**Actual:** The wrapper exits with vitest's or the build's status. On a green run that is
+0, the translator's stderr line scrolls past, and the badge goes stale without a word.
+
+**Found by:** /qa-review on unknown-mode-path-has-no-test, 2026-09-14 — QA Test Coverage
+Review; verified in the main loop by reading `run-tests.sh:16-21` and `run-build.sh:39-44`
+and by running the two probes in steps 1 and 2.
+
+---

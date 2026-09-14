@@ -1,8 +1,8 @@
 # Ratify Debt
 
-## [ ] Debt 1: The no-report branch's exit-code independence has no test
+## [x] Debt 1: The no-report branch's exit-code independence has no test
 
-**Status:** Open
+**Status:** Paid
 **Kind:** test-gap
 **Where:** `scripts/airtower-results.mjs:40`, `tests/scripts/airtower-results.test.ts:205`
 **Due when:** touching `scripts/airtower-results.mjs` · touching `tests/scripts/airtower-results.test.ts`
@@ -25,3 +25,8 @@ The next Next Up item (the unknown-mode path's missing test) opens the same file
 **Found by:** /qa-review on bug-4-green-badge-on-missing-report, 2026-09-14 — QA Test
 Coverage Review; verified in the main loop by reading the two Bug 4 tests, both of which
 pass exit code 1.
+
+**Paid:** `tests/scripts/airtower-results.test.ts:233` — one test beside the two Bug 4
+cases, `run('tests', null, 0)`, asserting `failed` at least 1 and `passed` 0. Landed as
+its own commit on `unknown-mode-path-has-no-test`, 2026-09-14, the branch the entry
+named as the one that would open the file.
