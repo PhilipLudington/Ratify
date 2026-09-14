@@ -229,6 +229,18 @@ describe('the tests translator', () => {
     expect(results.passed).toBe(0);
     expect(results.failures).toHaveLength(1);
   });
+
+  it('reports a failure for a missing report even when the exit code is zero', () => {
+    // Debt 1. Both cases above hand the translator exit code 1, so they would
+    // stay green if the branch were made conditional on it — the shape `build`
+    // mode uses one screen down — and that would bring back the green badge
+    // over a dead run for the case where vitest exits 0 and writes nothing. A
+    // missing report is a failed run whatever the exit code says.
+    const results = run('tests', null, 0) as Results;
+
+    expect(results.failed).toBeGreaterThanOrEqual(1);
+    expect(results.passed).toBe(0);
+  });
 });
 
 // `build` mode reads the log `run-build.sh` tees and decides the build badge.
